@@ -134,11 +134,9 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
     if (isRunning && countdown === 0) {
       stopAllSounds().catch(console.error);
       
-      setIsResting(!isResting);
-      
+      // Si nous sommes dans la phase de travail
       if (!isResting) {
-        setCurrentTime(parseInt(restTime));
-      } else {
+        // Vérifier si c'était la dernière série
         if (currentRound >= parseInt(totalRounds)) {
           if (isComponentMountedRef.current) {
             setTimeout(() => {
@@ -149,7 +147,12 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
           }
           return;
         }
-        
+        // Si ce n'est pas la dernière série, passer au repos
+        setIsResting(true);
+        setCurrentTime(parseInt(restTime));
+      } else {
+        // Passage de repos à travail pour la série suivante
+        setIsResting(false);
         setCurrentTime(0);
         setCurrentRound(prev => prev + 1);
       }
@@ -226,6 +229,7 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
 
               // End of rest period
               if (prev <= 1) {
+                // Si c'était la dernière série, on ne revient pas en mode travail
                 if (currentRound >= parseInt(totalRounds)) {
                   if (isComponentMountedRef.current) {
                     setTimeout(() => {
@@ -237,6 +241,7 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
                   return 0;
                 }
                 
+                // Sinon on passe à la série suivante
                 setIsResting(false);
                 setCurrentTime(0);
                 setCurrentRound(prevRound => prevRound + 1);
@@ -336,11 +341,17 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
 
             {countdown === 0 && (
               <TouchableOpacity
-                style={[styles.phaseButton, isResting && styles.phaseButtonActive]}
+                style={[
+                  styles.phaseButton, 
+                  isResting && styles.phaseButtonActive,
+                  // Style spécial pour le bouton TERMINER
+                  (!isResting && currentRound >= parseInt(totalRounds)) && styles.terminateButton
+                ]}
                 onPress={handleNextPhase}
               >
                 <Text style={styles.phaseButtonText}>
-                  {isResting ? 'REPRENDRE' : 'RÉCUPÉRATION'}
+                  {isResting ? 'REPRENDRE' : 
+                  (currentRound >= parseInt(totalRounds) ? 'TERMINER' : 'RÉCUPÉRATION')}
                 </Text>
               </TouchableOpacity>
             )}
@@ -368,7 +379,7 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
   );
 };
 
-// Styles récupérés du fichier JS original
+// Styles avec ajout du style pour le bouton TERMINER
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -560,6 +571,10 @@ const styles = StyleSheet.create({
   phaseButtonActive: {
     backgroundColor: 'rgba(76, 175, 80, 0.2)',
     borderColor: COLORS.success,
+  },
+  terminateButton: {
+    backgroundColor: 'rgba(255, 69, 58, 0.2)',
+    borderColor: COLORS.error,
   },
   phaseButtonText: {
     fontSize: SIZES.fontSize.body,
