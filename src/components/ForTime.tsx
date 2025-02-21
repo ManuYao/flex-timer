@@ -374,6 +374,8 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
         minValue={pickerConfig.minValue}
         maxValue={pickerConfig.maxValue}
         onConfirm={handlePickerConfirm}
+        formatAsTime={pickerTarget === 'rest'} // Activer le format minutes pour le temps de repos
+        unit="SEC"
       />
     </View>
   );

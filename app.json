@@ -29,9 +29,18 @@
               "scheme": "timesport"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
-      ]
+      ],
+      "permissions": [
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.WAKE_LOCK"
+      ],
+      "package": "com.yao225.timesport"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -49,6 +58,11 @@
           "minimumInterval": 60
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "27ebd8c7-6402-4847-b3c5-038148ce3118"
+      }
+    }
   }
 }

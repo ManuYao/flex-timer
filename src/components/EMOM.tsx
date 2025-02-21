@@ -49,8 +49,8 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
       };
     } else if (target === 'interval') {
       config = {
-        minValue: 1,
-        maxValue: 300,
+        minValue: 10,
+        maxValue: 300, // Permet jusqu'à 5 minutes
         initialValue: parseInt(intervalTime) || 60
       };
     }
@@ -311,6 +311,8 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
         minValue={pickerConfig.minValue}
         maxValue={pickerConfig.maxValue}
         onConfirm={handlePickerConfirm}
+        formatAsTime={pickerTarget === 'interval'} // Activer le format minutes pour l'intervalle uniquement
+        unit="SEC"
       />
     </View>
   );
@@ -494,5 +496,3 @@ const styles = StyleSheet.create({
 });
 
 export default EMOM;
-
-//tmp

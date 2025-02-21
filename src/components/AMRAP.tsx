@@ -10,12 +10,6 @@ import { TimerProps } from '../types';
 const { width } = Dimensions.get('window');
 const CIRCLE_SIZE = width * 0.75;
 
-interface PickerConfig {
-  minValue: number;
-  maxValue: number;
-  initialValue: number;
-}
-
 const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
   const [totalDuration, setTotalDuration] = useState<string>('');
   const [workTime, setWorkTime] = useState<string>('');
@@ -30,8 +24,8 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
   
   // États pour NumberPicker
   const [pickerVisible, setPickerVisible] = useState<boolean>(false);
-  const [pickerTarget, setPickerTarget] = useState<string | null>(null);
-  const [pickerConfig, setPickerConfig] = useState<PickerConfig>({
+  const [pickerTarget, setPickerTarget] = useState<'duration' | 'work' | 'rest' | null>(null);
+  const [pickerConfig, setPickerConfig] = useState({
     minValue: 1,
     maxValue: 99,
     initialValue: 20
@@ -42,28 +36,9 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
   const isComponentMountedRef = useRef<boolean>(true);
   const lastCountdownRef = useRef<number>(0);
 
-  const validateAndFormatInput = useCallback((value: string, max: number = 999): string => {
-    const numberValue = value.replace(/[^0-9]/g, '');
-    const parsedValue = parseInt(numberValue);
-    if (isNaN(parsedValue) || parsedValue <= 0) return '';
-    return Math.min(parsedValue, max).toString();
-  }, []);
-
-  const handleTotalDurationChange = useCallback((value: string) => {
-    setTotalDuration(validateAndFormatInput(value, 999));
-  }, [validateAndFormatInput]);
-
-  const handleWorkTimeChange = useCallback((value: string) => {
-    setWorkTime(validateAndFormatInput(value, 999));
-  }, [validateAndFormatInput]);
-
-  const handleRestTimeChange = useCallback((value: string) => {
-    setRestTime(validateAndFormatInput(value, 999));
-  }, [validateAndFormatInput]);
-  
   // Fonction pour ouvrir le NumberPicker
-  const openNumberPicker = useCallback((target: string) => {
-    let config: PickerConfig = {
+  const openNumberPicker = useCallback((target: 'duration' | 'work' | 'rest') => {
+    let config = {
       minValue: 1,
       initialValue: 20,
       maxValue: 99
@@ -430,6 +405,8 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
         minValue={pickerConfig.minValue}
         maxValue={pickerConfig.maxValue}
         onConfirm={handlePickerConfirm}
+        formatAsTime={pickerTarget === 'work' || pickerTarget === 'rest' || pickerTarget === 'duration'}
+        unit="SEC"
       />
     </View>
   );

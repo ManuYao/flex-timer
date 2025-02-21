@@ -349,6 +349,8 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
         minValue={pickerConfig.minValue}
         maxValue={pickerConfig.maxValue}
         onConfirm={handlePickerConfirm}
+        formatAsTime={pickerTarget === 'work' || pickerTarget === 'rest'} // Activer le format minutes:secondes pour les temps de travail et repos
+        unit="SEC"
       />
     </View>
   );
