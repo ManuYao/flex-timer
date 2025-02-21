@@ -27,27 +27,23 @@ let activeSounds = new Map<string, {
   timeout: NodeJS.Timeout | null
 }>();
 
-// État du ducking - garde en mémoire s'il est actif
-let isDuckingActive = false;
-
 /**
- * Configure le mode audio avec ou sans ducking
- * @param enableDucking - Activer ou désactiver le ducking
+ * Configuration audio sans ducking - Configuration stricte
+ * Cette approche force la désactivation du ducking
  */
-const setAudioDucking = async (enableDucking: boolean): Promise<void> => {
-  if (isDuckingActive === enableDucking) return; // Ne rien faire si l'état est déjà correct
-  
+const configureSoundOptions = async (): Promise<void> => {
   try {
+    // Configuration du mode audio global avec tous les paramètres possibles pour désactiver le ducking
     await Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
       allowsRecordingIOS: false,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: enableDucking, // Contrôle dynamique du ducking
+      staysActiveInBackground: true, // Garantit que l'audio reste actif en arrière-plan
+      shouldDuckAndroid: false,      // Désactive explicitement le ducking
     });
-    isDuckingActive = enableDucking;
-    console.log(`[Audio] Ducking ${enableDucking ? 'activé' : 'désactivé'}`);
+    
+    console.log('[Audio] Mode audio configuré sans ducking');
   } catch (error) {
-    console.error('[Audio] Erreur lors de la configuration du ducking:', error);
+    console.error('[Audio] Erreur lors de la configuration audio:', error);
   }
 };
 
@@ -60,13 +56,21 @@ export const initializeAudio = async (): Promise<void> => {
   try {
     console.log('[Audio] Initialisation du système audio...');
     
-    // Configuration initiale du mode audio SANS ducking par défaut
-    await setAudioDucking(false);
+    // Configuration audio sans ducking
+    await configureSoundOptions();
     
     // Préchargement de tous les sons en parallèle
     const loadPromises = Object.entries(soundFiles).map(async ([key, source]) => {
       try {
-        const { sound } = await Audio.Sound.createAsync(source, { shouldPlay: false });
+        // Créer le son avec des options pour prévenir le ducking
+        const { sound } = await Audio.Sound.createAsync(source, { 
+          shouldPlay: false,
+          volume: 0.8,           // Volume légèrement inférieur au max pour éviter la distorsion
+        });
+        
+        // Configurer les sons pour qu'ils jouent sans ducking
+        await sound.setIsLoopingAsync(false);
+        
         soundObjects[key as SoundKey] = sound;
         console.log(`[Audio] Son préchargé: ${key}`);
       } catch (err) {
@@ -101,11 +105,6 @@ export const stopSound = async (soundKey: string): Promise<void> => {
       await activeSound.sound.stopAsync();
       await activeSound.sound.setPositionAsync(0);
       activeSounds.delete(soundKey);
-      
-      // Si c'était le dernier son actif, désactiver le ducking
-      if (activeSounds.size === 0 && isDuckingActive) {
-        await setAudioDucking(false);
-      }
     }
   } catch (error) {
     console.error(`[Audio] Erreur lors de l'arrêt du son ${soundKey}:`, error);
@@ -113,22 +112,23 @@ export const stopSound = async (soundKey: string): Promise<void> => {
 };
 
 /**
- * Joue un son spécifié par sa clé avec gestion temporaire du ducking
+ * Joue un son spécifié par sa clé
  * @param soundKey - Identifiant du son à jouer
  * @param maxDuration - Durée maximale en ms après laquelle le son sera arrêté
  * @param allowParallel - Autoriser la lecture parallèle du même son
- * @param withDucking - Activer le ducking pendant la lecture de ce son
  */
 export const playSound = async (
   soundKey: string, 
   maxDuration: number = 1500, 
-  allowParallel: boolean = false,
-  withDucking: boolean = false
+  allowParallel: boolean = false
 ): Promise<void> => {
   try {
     // Initialise si nécessaire
     if (!initialized) {
       await initializeAudio();
+    } else {
+      // Reconfigurer les options audio avant chaque lecture pour s'assurer que le ducking est désactivé
+      await configureSoundOptions();
     }
     
     // Vérifie que la clé est valide
@@ -139,27 +139,30 @@ export const playSound = async (
     
     // Pour les sons comme fiveSecondsEnd, on permet la lecture parallèle
     // Pour les autres sons, on arrête s'ils sont déjà en cours
+    let finalSoundKey = soundKey;
     if (!allowParallel) {
       await stopSound(soundKey);
     } else if (activeSounds.has(soundKey)) {
       // Si le son est déjà en cours et qu'on permet la lecture parallèle,
       // on crée un identifiant unique pour cette instance
-      soundKey = `${soundKey}_${Date.now()}`;
+      finalSoundKey = `${soundKey}_${Date.now()}`;
     }
     
-    // Activer le ducking si demandé
-    if (withDucking && !isDuckingActive) {
-      await setAudioDucking(true);
-    }
-    
-    console.log(`[Audio] Lecture: ${soundKey}${withDucking ? ' (avec ducking)' : ''}`);
+    console.log(`[Audio] Lecture: ${finalSoundKey}`);
     
     // Récupère ou charge le son
     let soundToPlay = soundObjects[soundKey as SoundKey];
     if (!soundToPlay) {
       try {
         const source = soundFiles[soundKey as SoundKey];
-        const { sound } = await Audio.Sound.createAsync(source);
+        const { sound } = await Audio.Sound.createAsync(source, {
+          shouldPlay: false,
+          volume: 0.8,
+        });
+        
+        // Configurer le son pour qu'il joue sans ducking
+        await sound.setIsLoopingAsync(false);
+        
         soundToPlay = sound;
         soundObjects[soundKey as SoundKey] = sound;
       } catch (err) {
@@ -172,21 +175,21 @@ export const playSound = async (
     const status = await soundToPlay.getStatusAsync();
     if (status.isLoaded) {
       await soundToPlay.setPositionAsync(0);
+      
+      // Réconfigurer les options du son avant la lecture
+      await soundToPlay.setVolumeAsync(0.8);
+      
+      // Lecture effective du son
       await soundToPlay.playAsync();
       
       // Configure un timeout pour arrêter le son après maxDuration
       const timeout = setTimeout(async () => {
-        console.log(`[Audio] Arrêt automatique après délai: ${soundKey}`);
-        await stopSound(soundKey);
-        
-        // Vérifier s'il n'y a plus de sons actifs pour désactiver le ducking
-        if (activeSounds.size === 0 && isDuckingActive) {
-          await setAudioDucking(false);
-        }
+        console.log(`[Audio] Arrêt automatique après délai: ${finalSoundKey}`);
+        await stopSound(finalSoundKey);
       }, maxDuration);
       
       // Ajoute le son à la liste des sons actifs
-      activeSounds.set(soundKey, {
+      activeSounds.set(finalSoundKey, {
         sound: soundToPlay,
         timeout: timeout
       });
@@ -197,18 +200,13 @@ export const playSound = async (
             'didJustFinish' in playbackStatus && 
             playbackStatus.didJustFinish) {
           
-          const activeSound = activeSounds.get(soundKey);
+          const activeSound = activeSounds.get(finalSoundKey);
           if (activeSound?.timeout) {
             clearTimeout(activeSound.timeout);
           }
           
-          activeSounds.delete(soundKey);
-          console.log(`[Audio] Son terminé naturellement: ${soundKey}`);
-          
-          // Vérifier s'il n'y a plus de sons actifs pour désactiver le ducking
-          if (activeSounds.size === 0 && isDuckingActive) {
-            setAudioDucking(false).catch(console.error);
-          }
+          activeSounds.delete(finalSoundKey);
+          console.log(`[Audio] Son terminé naturellement: ${finalSoundKey}`);
         }
       });
     } else {
@@ -220,7 +218,7 @@ export const playSound = async (
 };
 
 /**
- * Arrête tous les sons en cours de lecture et désactive le ducking
+ * Arrête tous les sons en cours de lecture
  */
 export const stopAllSounds = async (): Promise<void> => {
   try {
@@ -233,11 +231,6 @@ export const stopAllSounds = async (): Promise<void> => {
     const stopPromises = soundKeys.map(key => stopSound(key));
     await Promise.all(stopPromises);
     
-    // S'assurer que le ducking est désactivé
-    if (isDuckingActive) {
-      await setAudioDucking(false);
-    }
-    
     console.log('[Audio] Tous les sons arrêtés');
   } catch (error) {
     console.error('[Audio] Erreur d\'arrêt général:', error);
@@ -245,37 +238,59 @@ export const stopAllSounds = async (): Promise<void> => {
 };
 
 /**
- * Joue un son de décompte pour chaque seconde du décompte avec ducking
+ * Joue un son de décompte pour chaque seconde du décompte
  * @param second - Seconde actuelle du décompte
  */
 export const playCountdownSound = async (second: number): Promise<void> => {
   try {
-    // Identifiant unique pour chaque seconde
-    const soundId = `countdown_${second}`;
+    // Reconfigurer l'audio avant ce son important
+    await configureSoundOptions();
     
-    // Utilise le son de décompte avec ducking activé
-    await playSound('countdown', 800, false, true);
+    // Utilise le son de décompte
+    await playSound('countdown', 800, false);
   } catch (error) {
     console.error('[Audio] Erreur de lecture du décompte:', error);
   }
 };
 
 /**
- * Joue un son d'alerte (fin ou milieu) qui doit être complet avec ducking
- * Garantit que le son sera joué entièrement sans être coupé
+ * Joue un son d'alerte (fin ou milieu) avec une configuration explicite pour éviter le ducking
  * @param soundKey - Identifiant du son à jouer
  * @param allowOverlap - Autoriser la superposition avec d'autres sons
  */
 export const playAlertSound = async (soundKey: 'fiveSecondsEnd' | 'midExercise', allowOverlap: boolean = true): Promise<void> => {
   try {
+    // Configuration explicite du mode audio - TRÈS IMPORTANT: doit être fait avant chaque alerte
+    await Audio.setAudioModeAsync({
+      playsInSilentModeIOS: true,
+      allowsRecordingIOS: false,
+      staysActiveInBackground: true, // Garantit que l'audio reste actif en arrière-plan
+      shouldDuckAndroid: false,      // Désactive le ducking de façon explicite
+    });
+    
+    console.log(`[Audio] Mode audio explicitement reconfiguré pour son: ${soundKey}`);
+    
     // Durée plus longue pour ces sons importants
     const duration = soundKey === 'fiveSecondsEnd' ? 5000 : 2000;
     
-    // Permettre la lecture parallèle pour garantir que le son sera joué entièrement
-    // et activer le ducking pendant la lecture
-    await playSound(soundKey, duration, allowOverlap, true);
+    // Création d'un nouvel objet son à chaque fois pour éviter les problèmes
+    const soundSource = soundFiles[soundKey];
+    const { sound } = await Audio.Sound.createAsync(soundSource, {
+      shouldPlay: true,
+      volume: 0.9, // Volume légèrement plus bas pour éviter la distorsion
+    });
     
-    console.log(`[Audio] Son d'alerte joué: ${soundKey} (avec ducking temporaire)`);
+    // Jouer le son immédiatement
+    await sound.playAsync();
+    
+    // Configuration du timeout pour décharger le son
+    setTimeout(async () => {
+      await sound.stopAsync();
+      await sound.unloadAsync();
+      console.log(`[Audio] Son d'alerte terminé et déchargé: ${soundKey}`);
+    }, duration + 100);
+    
+    console.log(`[Audio] Son d'alerte joué avec configuration spéciale: ${soundKey}`);
   } catch (error) {
     console.error(`[Audio] Erreur de lecture du son d'alerte ${soundKey}:`, error);
   }
@@ -317,7 +332,6 @@ export const cleanupSounds = async (): Promise<void> => {
     await Promise.all(unloadPromises);
     initialized = false;
     activeSounds.clear();
-    isDuckingActive = false;
     console.log('[Audio] Nettoyage terminé');
   } catch (error) {
     console.error('[Audio] Erreur de nettoyage:', error);
