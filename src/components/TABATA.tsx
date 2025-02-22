@@ -1,4 +1,3 @@
-// src/components/TABATA.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, Alert, Dimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -10,15 +9,24 @@ import { TimerProps } from '../types';
 const { width } = Dimensions.get('window');
 const CIRCLE_SIZE = width * 0.75;
 
+// Définition des valeurs par défaut
+const DEFAULT_VALUES = {
+  ROUNDS: "8",
+  WORK_TIME: "20",
+  REST_TIME: "10",
+  COUNTDOWN: 10
+} as const;
+
 const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
-  const [rounds, setRounds] = useState<string>('');
-  const [workTime, setWorkTime] = useState<string>('');
-  const [restTime, setRestTime] = useState<string>('');
+  // États initialisés avec les valeurs par défaut
+  const [rounds, setRounds] = useState<string>(DEFAULT_VALUES.ROUNDS);
+  const [workTime, setWorkTime] = useState<string>(DEFAULT_VALUES.WORK_TIME);
+  const [restTime, setRestTime] = useState<string>(DEFAULT_VALUES.REST_TIME);
   const [currentRound, setCurrentRound] = useState<number>(1);
-  const [currentTime, setCurrentTime] = useState<number>(0);
+  const [currentTime, setCurrentTime] = useState<number>(parseInt(DEFAULT_VALUES.WORK_TIME));
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [isResting, setIsResting] = useState<boolean>(false);
-  const [countdown, setCountdown] = useState<number>(10);
+  const [countdown, setCountdown] = useState<number>(DEFAULT_VALUES.COUNTDOWN);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   
   // États pour NumberPicker
@@ -27,7 +35,7 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
   const [pickerConfig, setPickerConfig] = useState({
     minValue: 1,
     maxValue: 99,
-    initialValue: 8
+    initialValue: parseInt(DEFAULT_VALUES.ROUNDS)
   });
   
   // Références
@@ -35,12 +43,11 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
   const isComponentMountedRef = useRef<boolean>(true);
   const lastCountdownRef = useRef<number>(0);
 
-  // Fonction pour ouvrir le NumberPicker avec la configuration appropriée
   const openNumberPicker = useCallback((target: 'rounds' | 'work' | 'rest') => {
     let config = {
       minValue: 1,
-      initialValue: 8,
-      maxValue: 30
+      maxValue: 99,
+      initialValue: parseInt(DEFAULT_VALUES.ROUNDS)
     };
     
     switch (target) {
@@ -48,21 +55,21 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
         config = {
           minValue: 1,
           maxValue: 30,
-          initialValue: parseInt(rounds) || 8
+          initialValue: parseInt(rounds)
         };
         break;
       case 'work':
         config = {
           minValue: 5,
           maxValue: 120,
-          initialValue: parseInt(workTime) || 20
+          initialValue: parseInt(workTime)
         };
         break;
       case 'rest':
         config = {
           minValue: 5,
           maxValue: 120,
-          initialValue: parseInt(restTime) || 10
+          initialValue: parseInt(restTime)
         };
         break;
     }
@@ -72,7 +79,6 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
     setPickerVisible(true);
   }, [rounds, workTime, restTime]);
 
-  // Gérer la confirmation du sélecteur
   const handlePickerConfirm = useCallback((value: number) => {
     switch (pickerTarget) {
       case 'rounds':
@@ -88,14 +94,12 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
     setPickerVisible(false);
   }, [pickerTarget]);
 
-  // Formater le temps pour l'affichage
   const formatTime = useCallback((time: number): string => {
     const minutes = Math.floor(time / 60);
     const seconds = time % 60;
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   }, []);
 
-  // Démarrer le chronomètre avec validation
   const startTimer = useCallback(() => {
     const roundsValue = parseInt(rounds);
     const workValue = parseInt(workTime);
@@ -112,13 +116,12 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
     
     setIsRunning(true);
     setCurrentRound(1);
-    setCurrentTime(workValue); // Commencer avec le temps de travail
+    setCurrentTime(workValue);
     setIsResting(false);
-    setCountdown(10);
+    setCountdown(DEFAULT_VALUES.COUNTDOWN);
     setIsPaused(false);
   }, [rounds, workTime, restTime]);
 
-  // Réinitialiser le chronomètre et nettoyer
   const resetTimer = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -130,12 +133,11 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
     setIsRunning(false);
     setIsPaused(false);
     setCurrentRound(1);
-    setCurrentTime(parseInt(workTime) || 0);
-    setCountdown(10);
+    setCurrentTime(parseInt(workTime));
+    setCountdown(DEFAULT_VALUES.COUNTDOWN);
     setIsResting(false);
   }, [workTime]);
 
-  // Basculer l'état de pause
   const pauseTimer = useCallback(() => {
     if (countdown === 0) {
       if (!isPaused) {
@@ -145,14 +147,12 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
     }
   }, [countdown, isPaused]);
 
-  // Assistants de style dynamique
   const getPhaseColor = useCallback((): string => {
     if (countdown > 0) return COLORS.warning;
     return isResting ? COLORS.warning : COLORS.success;
   }, [countdown, isResting]);
 
   const getBackgroundColor = useCallback((): string => {
-    // Utiliser une couleur de fond constante
     return COLORS.background;
   }, []);
 
@@ -161,7 +161,6 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
     return isResting ? 'rgba(255,200,0,0.1)' : 'rgba(0,255,0,0.1)';
   }, [countdown, isResting]);
 
-  // Nettoyer les ressources à la perte de focus
   useFocusEffect(
     React.useCallback(() => {
       isComponentMountedRef.current = true;
@@ -178,10 +177,8 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
     }, [])
   );
 
-  // Logique principale du chronomètre
   useEffect(() => {
     if (isRunning && !isPaused) {
-      // Sons pendant le décompte initial - uniquement pour les 3 dernières secondes
       if (countdown <= 3 && countdown > 0 && countdown !== lastCountdownRef.current) {
         playCountdownSound(countdown).catch(console.error);
         lastCountdownRef.current = countdown;
@@ -191,30 +188,24 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
         clearInterval(intervalRef.current);
       }
 
-      // Logique du décompte initial
       if (countdown > 0) {
         intervalRef.current = setInterval(() => {
           setCountdown(prev => prev - 1);
         }, 1000);
-      } 
-      // Logique principale du chronomètre
-      else {
+      } else {
         intervalRef.current = setInterval(() => {
           setCurrentTime(prev => {
             const currentPhaseTime = isResting ? parseInt(restTime) : parseInt(workTime);
             const midPoint = Math.floor(currentPhaseTime / 2);
             
-            // Jouer le son midExercise à mi-parcours si la phase est assez longue
             if (prev === midPoint && midPoint > 5) {
               playAlertSound('midExercise', true).catch(console.error);
             }
             
-            // Jouer le son 5 secondes avant la fin
             if (prev === 5) {
               playAlertSound('fiveSecondsEnd', true).catch(console.error);
             }
 
-            // Gérer les transitions de phase
             if (prev <= 0) {
               if (isResting) {
                 if (currentRound >= parseInt(rounds)) {
@@ -264,7 +255,7 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
                     <Text style={styles.phaseText}>ROUNDS</Text>
                     <View style={[styles.circleInputContainer, { width: '100%' }]}>
                       <Text style={styles.circleInput}>
-                        {rounds || "8"}
+                        {rounds}
                       </Text>
                     </View>
                   </View>
@@ -281,7 +272,7 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
                 <Text style={styles.label}>TRAVAIL</Text>
                 <View style={styles.inputWrapper}>
                   <Text style={styles.input}>
-                    {workTime || "20"}
+                    {workTime}
                   </Text>
                 </View>
                 <Text style={styles.unit}>SEC</Text>
@@ -295,7 +286,7 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
                 <Text style={styles.label}>REPOS</Text>
                 <View style={styles.inputWrapper}>
                   <Text style={styles.input}>
-                    {restTime || "10"}
+                    {restTime}
                   </Text>
                 </View>
                 <Text style={styles.unit}>SEC</Text>
@@ -349,7 +340,7 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
         minValue={pickerConfig.minValue}
         maxValue={pickerConfig.maxValue}
         onConfirm={handlePickerConfirm}
-        formatAsTime={pickerTarget === 'work' || pickerTarget === 'rest'} // Activer le format minutes:secondes pour les temps de travail et repos
+        formatAsTime={pickerTarget === 'work' || pickerTarget === 'rest'}
         unit="SEC"
       />
     </View>

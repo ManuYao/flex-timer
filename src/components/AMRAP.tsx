@@ -1,4 +1,3 @@
-// src/components/AMRAP.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, Alert, Dimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -10,15 +9,24 @@ import { TimerProps } from '../types';
 const { width } = Dimensions.get('window');
 const CIRCLE_SIZE = width * 0.75;
 
+// Définition des valeurs par défaut
+const DEFAULT_VALUES = {
+  DURATION: "20",
+  WORK_TIME: "30",
+  REST_TIME: "10",
+  COUNTDOWN: 10
+} as const;
+
 const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
-  const [totalDuration, setTotalDuration] = useState<string>('');
-  const [workTime, setWorkTime] = useState<string>('');
-  const [restTime, setRestTime] = useState<string>('');
-  const [currentTime, setCurrentTime] = useState<number>(0);
+  // États initialisés avec les valeurs par défaut
+  const [totalDuration, setTotalDuration] = useState<string>(DEFAULT_VALUES.DURATION);
+  const [workTime, setWorkTime] = useState<string>(DEFAULT_VALUES.WORK_TIME);
+  const [restTime, setRestTime] = useState<string>(DEFAULT_VALUES.REST_TIME);
+  const [currentTime, setCurrentTime] = useState<number>(parseInt(DEFAULT_VALUES.WORK_TIME));
   const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [isResting, setIsResting] = useState<boolean>(false);
-  const [countdown, setCountdown] = useState<number>(10);
+  const [countdown, setCountdown] = useState<number>(DEFAULT_VALUES.COUNTDOWN);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [isInfiniteMode, setIsInfiniteMode] = useState<boolean>(false);
   
@@ -28,7 +36,7 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
   const [pickerConfig, setPickerConfig] = useState({
     minValue: 1,
     maxValue: 99,
-    initialValue: 20
+    initialValue: parseInt(DEFAULT_VALUES.DURATION)
   });
   
   // Références
@@ -36,32 +44,35 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
   const isComponentMountedRef = useRef<boolean>(true);
   const lastCountdownRef = useRef<number>(0);
 
-  // Fonction pour ouvrir le NumberPicker
   const openNumberPicker = useCallback((target: 'duration' | 'work' | 'rest') => {
     let config = {
       minValue: 1,
-      initialValue: 20,
-      maxValue: 99
+      maxValue: 99,
+      initialValue: parseInt(DEFAULT_VALUES.DURATION)
     };
     
-    if (target === 'duration') {
-      config = {
-        minValue: 1,
-        maxValue: 180,
-        initialValue: parseInt(totalDuration) || 20
-      };
-    } else if (target === 'work') {
-      config = {
-        minValue: 1,
-        maxValue: 180,
-        initialValue: parseInt(workTime) || 30
-      };
-    } else if (target === 'rest') {
-      config = {
-        minValue: 1,
-        maxValue: 120,
-        initialValue: parseInt(restTime) || 10
-      };
+    switch (target) {
+      case 'duration':
+        config = {
+          minValue: 1,
+          maxValue: 180,
+          initialValue: parseInt(totalDuration)
+        };
+        break;
+      case 'work':
+        config = {
+          minValue: 1,
+          maxValue: 180,
+          initialValue: parseInt(workTime)
+        };
+        break;
+      case 'rest':
+        config = {
+          minValue: 1,
+          maxValue: 120,
+          initialValue: parseInt(restTime)
+        };
+        break;
     }
     
     setPickerConfig(config);
@@ -69,14 +80,17 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
     setPickerVisible(true);
   }, [totalDuration, workTime, restTime]);
 
-  // Gérer la confirmation du sélecteur
   const handlePickerConfirm = useCallback((value: number) => {
-    if (pickerTarget === 'duration') {
-      setTotalDuration(value.toString());
-    } else if (pickerTarget === 'work') {
-      setWorkTime(value.toString());
-    } else if (pickerTarget === 'rest') {
-      setRestTime(value.toString());
+    switch (pickerTarget) {
+      case 'duration':
+        setTotalDuration(value.toString());
+        break;
+      case 'work':
+        setWorkTime(value.toString());
+        break;
+      case 'rest':
+        setRestTime(value.toString());
+        break;
     }
     setPickerVisible(false);
   }, [pickerTarget]);
@@ -106,11 +120,11 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
     
     setIsRunning(false);
     setIsPaused(false);
-    setCurrentTime(0);
+    setCurrentTime(parseInt(workTime));
     setElapsedTime(0);
-    setCountdown(10);
+    setCountdown(DEFAULT_VALUES.COUNTDOWN);
     setIsResting(false);
-  }, []);
+  }, [workTime]);
 
   const startTimer = useCallback(() => {
     if (isInfiniteMode) {
@@ -136,7 +150,7 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
     setCurrentTime(isInfiniteMode ? parseInt(totalDuration) * 60 : parseInt(workTime));
     setElapsedTime(0);
     setIsPaused(false);
-    setCountdown(10);
+    setCountdown(DEFAULT_VALUES.COUNTDOWN);
     setIsResting(false);
   }, [isInfiniteMode, totalDuration, workTime, restTime]);
 
@@ -147,10 +161,8 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
       setIsResting(!isResting);
       
       if (!isResting) {
-        // Démarrer le repos avec le temps complet
         setCurrentTime(parseInt(restTime));
       } else {
-        // Retour au travail
         setCurrentTime(parseInt(workTime));
       }
     }
@@ -162,7 +174,6 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
   }, [countdown, isResting]);
 
   const getBackgroundColor = useCallback((): string => {
-    // Utiliser une couleur de fond constante
     return COLORS.background;
   }, []);
 
@@ -171,7 +182,6 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
     return isResting ? 'rgba(255,200,0,0.1)' : 'rgba(0,255,0,0.1)';
   }, [countdown, isResting]);
 
-  // Nettoyer les ressources à la perte de focus
   useFocusEffect(
     React.useCallback(() => {
       isComponentMountedRef.current = true;
@@ -188,10 +198,8 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
     }, [])
   );
 
-  // Logique principale du chronomètre
   useEffect(() => {
     if (isRunning && !isPaused) {
-      // Sons pendant le décompte initial - uniquement pour les 3 dernières secondes
       if (countdown <= 3 && countdown > 0 && countdown !== lastCountdownRef.current) {
         playCountdownSound(countdown).catch(console.error);
         lastCountdownRef.current = countdown;
@@ -201,28 +209,22 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
         clearInterval(intervalRef.current);
       }
 
-      // Logique du décompte initial
       if (countdown > 0) {
         intervalRef.current = setInterval(() => {
           setCountdown(prev => prev - 1);
         }, 1000);
-      } 
-      // Logique principale du chronométrage
-      else {
+      } else {
         intervalRef.current = setInterval(() => {
           setCurrentTime(prev => {
-            // Sons à mi-chemin (pour le travail ou le repos)
             const currentPhaseTime = isInfiniteMode ? 
               parseInt(totalDuration) * 60 : 
               (isResting ? parseInt(restTime) : parseInt(workTime));
             const midPoint = Math.floor(currentPhaseTime / 2);
             
-            // Jouer le son midExercise à mi-parcours si le temps est suffisamment long
             if (prev === midPoint && midPoint > 5) {
               playAlertSound('midExercise', true).catch(console.error);
             }
             
-            // Jouer le son 5 secondes avant la fin
             if (prev === 5) {
               playAlertSound('fiveSecondsEnd', true).catch(console.error);
             }
@@ -303,7 +305,7 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
                     <Text style={styles.phaseText}>DURÉE</Text>
                     <View style={[styles.circleInputContainer, { width: '100%' }]}>
                       <Text style={styles.circleInput}>
-                        {totalDuration || "20"}
+                        {totalDuration}
                       </Text>
                     </View>
                   </View>
@@ -321,7 +323,7 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
                   <Text style={styles.label}>TRAVAIL</Text>
                   <View style={styles.inputWrapper}>
                     <Text style={styles.input}>
-                      {workTime || "30"}
+                      {workTime}
                     </Text>
                   </View>
                   <Text style={styles.unit}>SEC</Text>
@@ -335,7 +337,7 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
                   <Text style={styles.label}>REPOS</Text>
                   <View style={styles.inputWrapper}>
                     <Text style={styles.input}>
-                      {restTime || "10"}
+                      {restTime}
                     </Text>
                   </View>
                   <Text style={styles.unit}>SEC</Text>

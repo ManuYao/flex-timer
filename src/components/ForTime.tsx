@@ -1,4 +1,3 @@
-// src/components/ForTime.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, Alert, Dimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -10,52 +9,57 @@ import { TimerProps } from '../types';
 const { width } = Dimensions.get('window');
 const CIRCLE_SIZE = width * 0.75;
 
+// Définition des valeurs par défaut
+const DEFAULT_VALUES = {
+  TOTAL_ROUNDS: "5",
+  REST_TIME: "60",
+  COUNTDOWN: 10
+} as const;
+
 const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
-  // Configuration states
-  const [totalRounds, setTotalRounds] = useState<string>('');
-  const [restTime, setRestTime] = useState<string>('');
-  
-  // Timer states
+  // États avec valeurs par défaut
+  const [totalRounds, setTotalRounds] = useState<string>(DEFAULT_VALUES.TOTAL_ROUNDS);
+  const [restTime, setRestTime] = useState<string>(DEFAULT_VALUES.REST_TIME);
   const [currentRound, setCurrentRound] = useState<number>(1);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [isResting, setIsResting] = useState<boolean>(false);
-  const [countdown, setCountdown] = useState<number>(10);
+  const [countdown, setCountdown] = useState<number>(DEFAULT_VALUES.COUNTDOWN);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   
-  // NumberPicker states
+  // États pour NumberPicker
   const [pickerVisible, setPickerVisible] = useState<boolean>(false);
   const [pickerTarget, setPickerTarget] = useState<'rounds' | 'rest' | null>(null);
   const [pickerConfig, setPickerConfig] = useState({
     minValue: 1,
     maxValue: 30,
-    initialValue: 5
+    initialValue: parseInt(DEFAULT_VALUES.TOTAL_ROUNDS)
   });
   
-  // Refs
+  // Références
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isComponentMountedRef = useRef<boolean>(true);
   const lastCountdownRef = useRef<number>(0);
-  
-  // Open NumberPicker with appropriate configuration
+
+  // Fonction pour ouvrir le NumberPicker avec la configuration appropriée
   const openNumberPicker = useCallback((target: 'rounds' | 'rest') => {
     let config = {
       minValue: 1,
-      initialValue: 5,
-      maxValue: 30
+      maxValue: 30,
+      initialValue: parseInt(DEFAULT_VALUES.TOTAL_ROUNDS)
     };
     
     if (target === 'rounds') {
       config = {
         minValue: 1,
         maxValue: 30,
-        initialValue: parseInt(totalRounds) || 5
+        initialValue: parseInt(totalRounds)
       };
     } else if (target === 'rest') {
       config = {
         minValue: 5,
         maxValue: 300,
-        initialValue: parseInt(restTime) || 60
+        initialValue: parseInt(restTime)
       };
     }
     
@@ -64,7 +68,7 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
     setPickerVisible(true);
   }, [totalRounds, restTime]);
 
-  // Handle NumberPicker confirmation
+  // Gestionnaire de confirmation du NumberPicker
   const handlePickerConfirm = useCallback((value: number) => {
     if (pickerTarget === 'rounds') {
       setTotalRounds(value.toString());
@@ -74,14 +78,14 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
     setPickerVisible(false);
   }, [pickerTarget]);
 
-  // Format time for display (MM:SS)
+  // Format du temps en MM:SS
   const formatTime = useCallback((time: number): string => {
     const minutes = Math.floor(time / 60);
     const seconds = time % 60;
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   }, []);
 
-  // Start timer with validation
+  // Démarrage du timer
   const startTimer = useCallback(() => {
     const roundsValue = parseInt(totalRounds);
     const restValue = parseInt(restTime);
@@ -97,12 +101,12 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
     setIsRunning(true);
     setCurrentRound(1);
     setCurrentTime(0);
-    setCountdown(10);
+    setCountdown(DEFAULT_VALUES.COUNTDOWN);
     setIsPaused(false);
     setIsResting(false);
   }, [totalRounds, restTime]);
 
-  // Reset timer and clean up
+  // Réinitialisation du timer
   const resetTimer = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -115,11 +119,11 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
     setIsPaused(false);
     setCurrentRound(1);
     setCurrentTime(0);
-    setCountdown(10);
+    setCountdown(DEFAULT_VALUES.COUNTDOWN);
     setIsResting(false);
   }, []);
 
-  // Pause timer
+  // Pause/Reprise du timer
   const pauseTimer = useCallback(() => {
     if (isRunning && countdown === 0) {
       if (!isPaused) {
@@ -129,15 +133,15 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
     }
   }, [isRunning, countdown, isPaused]);
 
-  // Handle next phase transition (work/rest)
+  // Passage à la phase suivante (travail/repos)
   const handleNextPhase = useCallback(() => {
     if (isRunning && countdown === 0) {
       stopAllSounds().catch(console.error);
       
-      // Si nous sommes dans la phase de travail
       if (!isResting) {
-        // Vérifier si c'était la dernière série
+        // Si on termine une phase de travail
         if (currentRound >= parseInt(totalRounds)) {
+          // Si c'était la dernière série
           if (isComponentMountedRef.current) {
             setTimeout(() => {
               resetTimer();
@@ -147,11 +151,11 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
           }
           return;
         }
-        // Si ce n'est pas la dernière série, passer au repos
+        // Sinon on passe au repos
         setIsResting(true);
         setCurrentTime(parseInt(restTime));
       } else {
-        // Passage de repos à travail pour la série suivante
+        // On passe du repos au travail
         setIsResting(false);
         setCurrentTime(0);
         setCurrentRound(prev => prev + 1);
@@ -159,23 +163,18 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
     }
   }, [isRunning, countdown, isResting, restTime, currentRound, totalRounds, resetTimer, onComplete]);
 
-  // Dynamic style helpers - garder le fond constant
+  // Couleurs dynamiques
   const getPhaseColor = useCallback((): string => {
     if (countdown > 0) return COLORS.warning;
     return isResting ? COLORS.warning : COLORS.success;
   }, [countdown, isResting]);
-
-  const getBackgroundColor = useCallback((): string => {
-    // Toujours retourner la même couleur de fond
-    return COLORS.background;
-  }, []);
 
   const getCircleBackground = useCallback((): string => {
     if (countdown > 0) return 'rgba(255,255,255,0.1)';
     return isResting ? 'rgba(255,200,0,0.1)' : 'rgba(0,255,0,0.1)';
   }, [countdown, isResting]);
 
-  // Clean up resources when component loses focus
+  // Nettoyage à la perte du focus
   useFocusEffect(
     React.useCallback(() => {
       isComponentMountedRef.current = true;
@@ -192,10 +191,10 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
     }, [])
   );
 
-  // Main timer logic
+  // Effet principal de gestion du timer
   useEffect(() => {
     if (isRunning && !isPaused) {
-      // Initial countdown sounds - only for the last 3 seconds
+      // Gestion du décompte initial
       if (countdown <= 3 && countdown > 0 && countdown !== lastCountdownRef.current) {
         playCountdownSound(countdown).catch(console.error);
         lastCountdownRef.current = countdown;
@@ -205,31 +204,25 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
         clearInterval(intervalRef.current);
       }
 
-      // Initial countdown logic
       if (countdown > 0) {
         intervalRef.current = setInterval(() => {
           setCountdown(prev => prev - 1);
         }, 1000);
-      } 
-      // Main timer logic
-      else {
+      } else {
         intervalRef.current = setInterval(() => {
           if (isResting) {
+            // Gestion du temps de repos (dégressif)
             setCurrentTime(prev => {
-              // Play sound at 5 seconds before the end
               if (prev === 5) {
                 playAlertSound('fiveSecondsEnd', true).catch(console.error);
               }
               
-              // Play sound at midpoint if rest time is long enough
               const midPoint = Math.floor(parseInt(restTime) / 2);
               if (prev === midPoint && midPoint > 5) {
                 playAlertSound('midExercise', true).catch(console.error);
               }
 
-              // End of rest period
               if (prev <= 1) {
-                // Si c'était la dernière série, on ne revient pas en mode travail
                 if (currentRound >= parseInt(totalRounds)) {
                   if (isComponentMountedRef.current) {
                     setTimeout(() => {
@@ -241,7 +234,6 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
                   return 0;
                 }
                 
-                // Sinon on passe à la série suivante
                 setIsResting(false);
                 setCurrentTime(0);
                 setCurrentRound(prevRound => prevRound + 1);
@@ -250,9 +242,8 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
               return prev - 1;
             });
           } else {
-            // Work phase - count up
+            // Gestion du temps de travail (progressif)
             setCurrentTime(prev => {
-              // Play periodic sounds during work - ensure complete playback
               if (prev > 0 && prev % 60 === 0) {
                 playAlertSound('midExercise', true).catch(console.error);
               }
@@ -272,9 +263,10 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
   }, [isRunning, countdown, isPaused, currentRound, totalRounds, currentTime, isResting, restTime, resetTimer, onComplete]);
 
   return (
-    <View style={[styles.container, { backgroundColor: getBackgroundColor() }]}>
+    <View style={[styles.container, { backgroundColor: COLORS.background }]}>
       <View style={styles.safeArea}>
         {!isRunning ? (
+          // Configuration initiale
           <View style={styles.setup}>
             <View style={styles.circleContainer}>
               <TouchableOpacity
@@ -286,7 +278,7 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
                     <Text style={styles.phaseText}>SÉRIES</Text>
                     <View style={[styles.circleInputContainer, { width: '100%' }]}>
                       <Text style={styles.circleInput}>
-                        {totalRounds || "5"}
+                        {totalRounds}
                       </Text>
                     </View>
                   </View>
@@ -302,7 +294,7 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
               <Text style={styles.label}>REPOS</Text>
               <View style={styles.inputWrapper}>
                 <Text style={styles.input}>
-                  {restTime || "60"}
+                  {restTime}
                 </Text>
               </View>
               <Text style={styles.unit}>SEC</Text>
@@ -316,6 +308,7 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
             </TouchableOpacity>
           </View>
         ) : (
+          // Affichage du timer en cours
           <View style={styles.timerDisplay}>
             <Pressable onPress={pauseTimer}>
               <View style={[
@@ -344,7 +337,6 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
                 style={[
                   styles.phaseButton, 
                   isResting && styles.phaseButtonActive,
-                  // Style spécial pour le bouton TERMINER
                   (!isResting && currentRound >= parseInt(totalRounds)) && styles.terminateButton
                 ]}
                 onPress={handleNextPhase}
@@ -374,14 +366,13 @@ const ForTime: React.FC<TimerProps> = ({ onComplete }) => {
         minValue={pickerConfig.minValue}
         maxValue={pickerConfig.maxValue}
         onConfirm={handlePickerConfirm}
-        formatAsTime={pickerTarget === 'rest'} // Activer le format minutes pour le temps de repos
+        formatAsTime={pickerTarget === 'rest'}
         unit="SEC"
       />
     </View>
   );
 };
 
-// Styles avec ajout du style pour le bouton TERMINER
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -472,7 +463,7 @@ const styles = StyleSheet.create({
   input: {
     fontSize: 32,
     fontWeight: '300',
-    color: COLORS.text,
+    color: '#FFFFFF',
     textAlign: 'center',
     height: 50,
     padding: 0,

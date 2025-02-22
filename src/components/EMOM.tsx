@@ -1,4 +1,3 @@
-// src/components/EMOM.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, Alert, Dimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -10,13 +9,21 @@ import { TimerProps } from '../types';
 const { width } = Dimensions.get('window');
 const CIRCLE_SIZE = width * 0.75;
 
+// Définition des valeurs par défaut
+const DEFAULT_VALUES = {
+  ROUNDS: "10",
+  INTERVAL: "60",
+  COUNTDOWN: 10
+} as const;
+
 const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
-  const [rounds, setRounds] = useState<string>('');
-  const [intervalTime, setIntervalTime] = useState<string>('');
+  // États initialisés avec les valeurs par défaut
+  const [rounds, setRounds] = useState<string>(DEFAULT_VALUES.ROUNDS);
+  const [intervalTime, setIntervalTime] = useState<string>(DEFAULT_VALUES.INTERVAL);
   const [currentRound, setCurrentRound] = useState<number>(1);
-  const [currentTime, setCurrentTime] = useState<number>(0);
+  const [currentTime, setCurrentTime] = useState<number>(parseInt(DEFAULT_VALUES.INTERVAL));
   const [isRunning, setIsRunning] = useState<boolean>(false);
-  const [countdown, setCountdown] = useState<number>(10);
+  const [countdown, setCountdown] = useState<number>(DEFAULT_VALUES.COUNTDOWN);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   
   // États pour NumberPicker
@@ -25,7 +32,7 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
   const [pickerConfig, setPickerConfig] = useState({
     minValue: 1,
     maxValue: 99,
-    initialValue: 10
+    initialValue: parseInt(DEFAULT_VALUES.ROUNDS)
   });
   
   // Références
@@ -33,25 +40,24 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
   const isComponentMountedRef = useRef<boolean>(true);
   const lastCountdownRef = useRef<number>(0);
 
-  // Fonction pour ouvrir le NumberPicker avec la configuration appropriée
   const openNumberPicker = useCallback((target: 'rounds' | 'interval') => {
     let config = {
       minValue: 1,
-      initialValue: 10,
-      maxValue: 99
+      maxValue: 99,
+      initialValue: parseInt(DEFAULT_VALUES.ROUNDS)
     };
     
     if (target === 'rounds') {
       config = {
         minValue: 1,
         maxValue: 99,
-        initialValue: parseInt(rounds) || 10
+        initialValue: parseInt(rounds)
       };
     } else if (target === 'interval') {
       config = {
         minValue: 10,
-        maxValue: 300, // Permet jusqu'à 5 minutes
-        initialValue: parseInt(intervalTime) || 60
+        maxValue: 300,
+        initialValue: parseInt(intervalTime)
       };
     }
     
@@ -60,7 +66,6 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
     setPickerVisible(true);
   }, [rounds, intervalTime]);
 
-  // Gérer la confirmation du sélecteur
   const handlePickerConfirm = useCallback((value: number) => {
     if (pickerTarget === 'rounds') {
       setRounds(value.toString());
@@ -70,14 +75,12 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
     setPickerVisible(false);
   }, [pickerTarget]);
 
-  // Formater le temps en MM:SS
   const formatTime = useCallback((time: number): string => {
     const minutes = Math.floor(time / 60);
     const seconds = time % 60;
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   }, []);
 
-  // Démarrer le chronomètre avec validation
   const startTimer = useCallback(() => {
     const roundsValue = parseInt(rounds);
     const intervalValue = parseInt(intervalTime);
@@ -92,12 +95,11 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
     
     setIsRunning(true);
     setCurrentRound(1);
-    setCurrentTime(parseInt(intervalTime));
-    setCountdown(10);
+    setCurrentTime(intervalValue);
+    setCountdown(DEFAULT_VALUES.COUNTDOWN);
     setIsPaused(false);
   }, [rounds, intervalTime]);
 
-  // Réinitialiser le chronomètre et nettoyer
   const resetTimer = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -110,10 +112,9 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
     setIsPaused(false);
     setCurrentRound(1);
     setCurrentTime(parseInt(intervalTime));
-    setCountdown(10);
+    setCountdown(DEFAULT_VALUES.COUNTDOWN);
   }, [intervalTime]);
 
-  // Basculer l'état de pause
   const handleCirclePress = useCallback(() => {
     if (isRunning && countdown === 0) {
       if (!isPaused) {
@@ -123,14 +124,12 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
     }
   }, [isRunning, countdown, isPaused]);
 
-  // Assistants de style dynamique
   const getPhaseColor = useCallback(() => {
     if (countdown > 0) return COLORS.warning;
     return COLORS.success;
   }, [countdown]);
 
   const getBackgroundColor = useCallback(() => {
-    // Utiliser une couleur de fond constante
     return COLORS.background;
   }, []);
 
@@ -139,7 +138,6 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
     return 'rgba(0,255,0,0.1)';
   }, [countdown]);
 
-  // Nettoyer à la perte de focus du composant
   useFocusEffect(
     React.useCallback(() => {
       isComponentMountedRef.current = true;
@@ -156,10 +154,8 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
     }, [])
   );
 
-  // Logique principale du chronomètre
   useEffect(() => {
     if (isRunning && !isPaused) {
-      // Sons pendant le décompte initial - uniquement pour les 3 dernières secondes
       if (countdown <= 3 && countdown > 0 && countdown !== lastCountdownRef.current) {
         playCountdownSound(countdown).catch(console.error);
         lastCountdownRef.current = countdown;
@@ -169,32 +165,24 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
         clearInterval(intervalRef.current);
       }
 
-      // Logique du décompte initial
       if (countdown > 0) {
         intervalRef.current = setInterval(() => {
           setCountdown(prev => prev - 1);
         }, 1000);
-      } 
-      // Logique principale du chronomètre
-      else {
+      } else {
         intervalRef.current = setInterval(() => {
           setCurrentTime(prev => {
-            // Calculer le point médian pour jouer le son au milieu de l'intervalle
             const midPoint = Math.floor(parseInt(intervalTime) / 2);
             
-            // Jouer le son midExercise à mi-parcours si l'intervalle est assez long
             if (prev === midPoint && midPoint > 5) {
               playAlertSound('midExercise', true).catch(console.error);
             }
             
-            // Jouer le son 5 secondes avant la fin de l'intervalle
             if (prev === 5) {
               playAlertSound('fiveSecondsEnd', true).catch(console.error);
             }
 
-            // Fin de l'intervalle actuel
             if (prev <= 1) {
-              // Vérifier si tous les rounds sont terminés
               if (currentRound >= parseInt(rounds)) {
                 if (isComponentMountedRef.current) {
                   setTimeout(() => {
@@ -206,7 +194,6 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
                 return 0;
               }
               
-              // Passer au round suivant
               setCurrentRound(r => r + 1);
               return parseInt(intervalTime);
             }
@@ -240,7 +227,7 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
                     <Text style={styles.phaseText}>ROUNDS</Text>
                     <View style={[styles.circleInputContainer, { width: '100%' }]}>
                       <Text style={styles.circleInput}>
-                        {rounds || "10"}
+                        {rounds}
                       </Text>
                     </View>
                   </View>
@@ -256,7 +243,7 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
               <Text style={styles.label}>INTERVALLE</Text>
               <View style={styles.inputWrapper}>
                 <Text style={styles.input}>
-                  {intervalTime || "60"}
+                  {intervalTime}
                 </Text>
               </View>
               <Text style={styles.unit}>SEC</Text>
@@ -311,7 +298,7 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
         minValue={pickerConfig.minValue}
         maxValue={pickerConfig.maxValue}
         onConfirm={handlePickerConfirm}
-        formatAsTime={pickerTarget === 'interval'} // Activer le format minutes pour l'intervalle uniquement
+        formatAsTime={pickerTarget === 'interval'}
         unit="SEC"
       />
     </View>
