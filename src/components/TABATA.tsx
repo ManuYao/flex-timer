@@ -1,3 +1,4 @@
+// Source: src/components/TABATA.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, Alert, Dimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -5,6 +6,7 @@ import { COLORS, SIZES } from '../constants/theme';
 import { stopAllSounds, unloadSound, playCountdownSound, playAlertSound } from '../utils/sound';
 import NumberPicker from './common/NumberPicker';
 import { TimerProps } from '../types';
+import AppStateHandler from '../utils/AppStateHandler';
 
 const { width } = Dimensions.get('window');
 const CIRCLE_SIZE = width * 0.75;
@@ -42,6 +44,140 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isComponentMountedRef = useRef<boolean>(true);
   const lastCountdownRef = useRef<number>(0);
+  // Référence pour le mode actuel
+  const modeRef = useRef<'countdown' | 'work' | 'rest' | 'idle'>('idle');
+  // Utiliser une ref pour les fonctions timer pour briser les dépendances circulaires
+  const timerFunctionsRef = useRef<{
+    resetTimer: () => void;
+    startInterval: () => void;
+    stopAllTimers: () => void;
+  }>({
+    resetTimer: () => {},
+    startInterval: () => {},
+    stopAllTimers: () => {}
+  });
+
+  // Logger avec préfixe pour faciliter le débogage
+  const log = (message: string, data?: any) => {
+    console.log(`[TABATA] ${message}`, data !== undefined ? data : '');
+  };
+
+  // Fonction pour arrêter tous les timers - définie en premier
+  const stopAllTimers = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
+  
+  // Mettre à jour la référence de la fonction
+  timerFunctionsRef.current.stopAllTimers = stopAllTimers;
+
+  const formatTime = useCallback((time: number): string => {
+    const minutes = Math.floor(time / 60);
+    const seconds = time % 60;
+    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+  }, []);
+
+  // Reset Timer (définie avant utilisation)
+  const resetTimer = useCallback(() => {
+    // Utiliser la fonction de la référence pour éviter les problèmes de dépendance
+    timerFunctionsRef.current.stopAllTimers();
+    
+    stopAllSounds().catch(console.error);
+    
+    setIsRunning(false);
+    setIsPaused(false);
+    setCurrentRound(1);
+    setCurrentTime(parseInt(workTime));
+    setCountdown(DEFAULT_VALUES.COUNTDOWN);
+    setIsResting(false);
+    modeRef.current = 'idle';
+  }, [workTime]);
+  
+  // Mettre à jour la référence de la fonction
+  timerFunctionsRef.current.resetTimer = resetTimer;
+  
+  // Start Interval
+  const startInterval = useCallback(() => {
+    // Utiliser la fonction de la référence pour éviter les problèmes de dépendance
+    timerFunctionsRef.current.stopAllTimers();
+    
+    // Déterminer le mode actuel
+    const currentMode = modeRef.current;
+    log(`Démarrage de l'intervalle en mode: ${currentMode}`);
+    
+    // Créer un nouvel intervalle selon le mode actuel
+    intervalRef.current = setInterval(() => {
+      if (currentMode === 'countdown') {
+        setCountdown(prev => {
+          const newValue = Math.max(0, prev - 1);
+          
+          // Sons pour les 3 dernières secondes
+          if (newValue <= 3 && newValue > 0 && newValue !== lastCountdownRef.current) {
+            playCountdownSound(newValue).catch(console.error);
+            lastCountdownRef.current = newValue;
+          }
+          
+          // Démarrer le timer principal quand le décompte atteint zéro
+          if (newValue === 0 && prev > 0) {
+            log('🔄 Décompte terminé, passage en mode travail');
+            modeRef.current = 'work';
+            timerFunctionsRef.current.startInterval(); // Redémarrer l'intervalle en mode work
+            playAlertSound('midExercise', true).catch(console.error);
+          }
+          
+          return newValue;
+        });
+      } 
+      else if (currentMode === 'work' || currentMode === 'rest') {
+        setCurrentTime(prev => {
+          const currentPhaseTime = isResting ? parseInt(restTime) : parseInt(workTime);
+          const midPoint = Math.floor(currentPhaseTime / 2);
+          
+          if (prev === midPoint && midPoint > 5) {
+            playAlertSound('midExercise', true).catch(console.error);
+          }
+          
+          if (prev === 5) {
+            playAlertSound('fiveSecondsEnd', true).catch(console.error);
+          }
+
+          if (prev <= 0) {
+            if (isResting) {
+              // Fin d'une phase de repos
+              if (currentRound >= parseInt(rounds)) {
+                if (isComponentMountedRef.current) {
+                  setTimeout(() => {
+                    timerFunctionsRef.current.resetTimer();
+                    onComplete?.();
+                    Alert.alert('Terminé', 'Entraînement terminé !');
+                  }, 100);
+                }
+                return 0;
+              }
+              
+              // Passage à la série suivante
+              setCurrentRound(r => r + 1);
+              setIsResting(false);
+              modeRef.current = 'work';
+              return parseInt(workTime);
+            } else {
+              // Fin d'une phase de travail, passage au repos
+              setIsResting(true);
+              modeRef.current = 'rest';
+              return parseInt(restTime);
+            }
+          }
+          
+          return prev - 1;
+        });
+      }
+    }, 1000);
+  }, [workTime, restTime, rounds, currentRound, isResting, onComplete]);
+  
+  // Mettre à jour la référence de la fonction
+  timerFunctionsRef.current.startInterval = startInterval;
 
   const openNumberPicker = useCallback((target: 'rounds' | 'work' | 'rest') => {
     let config = {
@@ -94,12 +230,6 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
     setPickerVisible(false);
   }, [pickerTarget]);
 
-  const formatTime = useCallback((time: number): string => {
-    const minutes = Math.floor(time / 60);
-    const seconds = time % 60;
-    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-  }, []);
-
   const startTimer = useCallback(() => {
     const roundsValue = parseInt(rounds);
     const workValue = parseInt(workTime);
@@ -111,6 +241,7 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
       return;
     }
     
+    log('▶️ Démarrage du timer TABATA');
     stopAllSounds().catch(console.error);
     lastCountdownRef.current = 0;
     
@@ -120,32 +251,176 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
     setIsResting(false);
     setCountdown(DEFAULT_VALUES.COUNTDOWN);
     setIsPaused(false);
+    modeRef.current = 'countdown';
+    
+    // Démarrer l'intervalle
+    timerFunctionsRef.current.startInterval();
   }, [rounds, workTime, restTime]);
-
-  const resetTimer = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    
-    stopAllSounds().catch(console.error);
-    
-    setIsRunning(false);
-    setIsPaused(false);
-    setCurrentRound(1);
-    setCurrentTime(parseInt(workTime));
-    setCountdown(DEFAULT_VALUES.COUNTDOWN);
-    setIsResting(false);
-  }, [workTime]);
 
   const pauseTimer = useCallback(() => {
     if (countdown === 0) {
       if (!isPaused) {
         stopAllSounds().catch(console.error);
+        timerFunctionsRef.current.stopAllTimers();
+      } else {
+        timerFunctionsRef.current.startInterval();
       }
       setIsPaused(!isPaused);
     }
   }, [countdown, isPaused]);
+
+  // Fonction auxiliaire pour gérer les transitions de phase en arrière-plan
+  const handlePhaseTransitionInBackground = useCallback((timeAfterPhase: number) => {
+    log(`Gestion d'une transition de phase en arrière-plan, temps après phase: ${timeAfterPhase}s`);
+    
+    if (isResting) {
+      // Transition repos → travail
+      console.log('┌───────────────────────────────────────┐');
+      console.log(`│ [TABATA] 🔄 TRANSITION AUTOMATIQUE     │`);
+      console.log(`│ REPOS → TRAVAIL                       │`);
+      console.log('└───────────────────────────────────────┘');
+      
+      // Fin d'une phase de repos, passage à la série suivante ou fin du programme
+      if (currentRound >= parseInt(rounds)) {
+        log('🏁 Entraînement terminé en arrière-plan (fin du dernier repos)');
+        timerFunctionsRef.current.resetTimer();
+        if (onComplete) onComplete();
+        
+        setTimeout(() => {
+          Alert.alert('Terminé', 'Entraînement terminé !');
+        }, 100);
+        
+        return true; // Indique que l'entraînement est terminé
+      }
+      
+      // Passage à la série suivante (travail)
+      setCurrentRound(r => r + 1);
+      setIsResting(false);
+      modeRef.current = 'work';
+      
+      // Calculer le temps restant dans la nouvelle phase de travail
+      const newWorkTime = Math.max(1, parseInt(workTime) - timeAfterPhase);
+      log(`Nouveau temps de travail (round ${currentRound + 1}): ${newWorkTime}s`);
+      setCurrentTime(newWorkTime);
+      
+      // Si ce temps de travail est déjà écoulé, gérer une nouvelle transition
+      if (newWorkTime <= 1) {
+        return handlePhaseTransitionInBackground(Math.abs(timeAfterPhase - parseInt(workTime)));
+      }
+      
+      return false; // L'entraînement continue
+    } else {
+      // Transition travail → repos
+      console.log('┌───────────────────────────────────────┐');
+      console.log(`│ [TABATA] 🔄 TRANSITION AUTOMATIQUE     │`);
+      console.log(`│ TRAVAIL → REPOS                       │`);
+      console.log('└───────────────────────────────────────┘');
+      
+      setIsResting(true);
+      modeRef.current = 'rest';
+      
+      // Calculer le temps restant dans la nouvelle phase de repos
+      const newRestTime = Math.max(1, parseInt(restTime) - timeAfterPhase);
+      log(`Nouveau temps de repos: ${newRestTime}s`);
+      setCurrentTime(newRestTime);
+      
+      // Si ce temps de repos est déjà écoulé, gérer une nouvelle transition
+      if (newRestTime <= 1) {
+        return handlePhaseTransitionInBackground(Math.abs(timeAfterPhase - parseInt(restTime)));
+      }
+      
+      return false; // L'entraînement continue
+    }
+  }, [isResting, workTime, restTime, rounds, currentRound, onComplete, resetTimer]);
+
+  // Gestion du temps passé en arrière-plan
+  const handleAppForeground = useCallback((timeInBackground: number) => {
+    if (!isRunning || !isComponentMountedRef.current) return;
+    
+    // Logs d'entrée clairs et visibles
+    console.log('┌─────────────────────────────────────────────────┐');
+    console.log(`│ [TABATA] 🔄 RETOUR AU PREMIER PLAN               │`);
+    console.log(`│ Temps passé en arrière-plan: ${(timeInBackground/1000).toFixed(1)}s │`);
+    console.log('└─────────────────────────────────────────────────┘');
+    log(`État avant ajustement: mode=${modeRef.current}, round=${currentRound}/${rounds}, isResting=${isResting}, time=${currentTime}, isPaused=${isPaused}`);
+    
+    if (isPaused) {
+      log('⏸️ Timer en pause, pas de mise à jour nécessaire');
+      return;
+    }
+    
+    const secondsInBackground = Math.floor(timeInBackground / 1000);
+    log(`Ajustement pour ${secondsInBackground} secondes écoulées en arrière-plan`);
+    
+    // Stopper l'intervalle actuel pendant les ajustements
+    timerFunctionsRef.current.stopAllTimers();
+    
+    // Gérer différemment selon le mode
+    if (countdown > 0) {
+      // Si on est en décompte initial
+      log(`Mode DÉCOMPTE: ${countdown}s restantes`);
+      
+      const newCountdown = Math.max(0, countdown - secondsInBackground);
+      log(`Décompte ajusté: ${countdown} → ${newCountdown}`);
+      
+      if (newCountdown <= 0) {
+        // Le décompte est terminé pendant l'arrière-plan
+        console.log('┌─────────────────────────────────────┐');
+        console.log(`│ [TABATA] 🔄 TRANSITION AUTOMATIQUE   │`);
+        console.log(`│ DÉCOMPTE → TRAVAIL                  │`);
+        console.log('└─────────────────────────────────────┘');
+        
+        // Mise à jour des états
+        setCountdown(0);
+        modeRef.current = 'work';
+        
+        // Calculer combien de temps s'est écoulé après le décompte
+        const timeAfterCountdown = secondsInBackground - countdown;
+        log(`Temps écoulé après le décompte: ${timeAfterCountdown}s`);
+        
+        // Vérifier si la première phase de travail est terminée
+        if (timeAfterCountdown >= parseInt(workTime)) {
+          // La première phase de travail est terminée, gérer les transitions suivantes
+          const isFinished = handlePhaseTransitionInBackground(timeAfterCountdown - parseInt(workTime));
+          if (isFinished) return; // Si l'entraînement est terminé
+        } else {
+          // Ajuster le temps de travail restant
+          const adjustedWorkTime = parseInt(workTime) - timeAfterCountdown;
+          log(`Premier travail ajusté: ${adjustedWorkTime}s restantes`);
+          setCurrentTime(Math.max(1, adjustedWorkTime)); // Au moins 1 seconde
+        }
+      } else {
+        // Le décompte n'est pas terminé
+        setCountdown(newCountdown);
+      }
+    } else {
+      // En phase de travail ou de repos
+      const currentPhaseTime = isResting ? parseInt(restTime) : parseInt(workTime);
+      
+      // Si le temps écoulé en arrière-plan est inférieur au temps restant actuel
+      if (secondsInBackground < currentTime) {
+        // Simplement ajuster le temps restant dans la phase actuelle
+        const newTime = currentTime - secondsInBackground;
+        log(`Ajustement simple: ${currentTime}s → ${newTime}s`);
+        setCurrentTime(Math.max(1, newTime)); // Au moins 1 seconde
+      } else {
+        // La phase actuelle est terminée, gérer les transitions suivantes
+        const timeAfterPhase = secondsInBackground - currentTime;
+        const isFinished = handlePhaseTransitionInBackground(timeAfterPhase);
+        if (isFinished) return; // Si l'entraînement est terminé
+      }
+    }
+    
+    // Redémarrer l'intervalle après les ajustements
+    setTimeout(() => {
+      timerFunctionsRef.current.startInterval();
+      
+      // Log de sortie pour indiquer l'état final
+      log(`État après ajustement: mode=${modeRef.current}, round=${currentRound}/${rounds}, isResting=${isResting}, time=${currentTime}`);
+      log('▶️ Intervalle redémarré');
+    }, 100);
+    
+  }, [isRunning, isPaused, countdown, currentRound, rounds, currentTime, isResting, workTime, restTime, handlePhaseTransitionInBackground]);
 
   const getPhaseColor = useCallback((): string => {
     if (countdown > 0) return COLORS.warning;
@@ -167,81 +442,39 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
       
       return () => {
         isComponentMountedRef.current = false;
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
-        
+        timerFunctionsRef.current.stopAllTimers();
         stopAllSounds().catch(console.error);
       };
     }, [])
   );
 
+  // Pour remplacer le useEffect original
   useEffect(() => {
+    // Ce useEffect se déclenche uniquement pour les transitions de timer actif
     if (isRunning && !isPaused) {
       if (countdown <= 3 && countdown > 0 && countdown !== lastCountdownRef.current) {
         playCountdownSound(countdown).catch(console.error);
         lastCountdownRef.current = countdown;
       }
 
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-
-      if (countdown > 0) {
-        intervalRef.current = setInterval(() => {
-          setCountdown(prev => prev - 1);
-        }, 1000);
-      } else {
-        intervalRef.current = setInterval(() => {
-          setCurrentTime(prev => {
-            const currentPhaseTime = isResting ? parseInt(restTime) : parseInt(workTime);
-            const midPoint = Math.floor(currentPhaseTime / 2);
-            
-            if (prev === midPoint && midPoint > 5) {
-              playAlertSound('midExercise', true).catch(console.error);
-            }
-            
-            if (prev === 5) {
-              playAlertSound('fiveSecondsEnd', true).catch(console.error);
-            }
-
-            if (prev <= 0) {
-              if (isResting) {
-                if (currentRound >= parseInt(rounds)) {
-                  if (isComponentMountedRef.current) {
-                    setTimeout(() => {
-                      resetTimer();
-                      onComplete?.();
-                      Alert.alert('Terminé', 'Entraînement terminé !');
-                    }, 100);
-                  }
-                  return 0;
-                }
-                setCurrentRound(r => r + 1);
-                setIsResting(false);
-                return parseInt(workTime);
-              } else {
-                setIsResting(true);
-                return parseInt(restTime);
-              }
-            }
-            return prev - 1;
-          });
-        }, 1000);
-      }
+      // Redémarrer l'intervalle quand l'état change
+      timerFunctionsRef.current.startInterval();
     }
 
+    // Nettoyage lorsque le composant se démonte ou que l'effet est invalidé
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+      timerFunctionsRef.current.stopAllTimers();
     };
-  }, [isRunning, countdown, isPaused, currentRound, rounds, workTime, restTime, isResting, resetTimer, onComplete]);
+  }, [isRunning, isPaused, countdown, currentTime, isResting, currentRound]);
 
   return (
     <View style={[styles.container, { backgroundColor: getBackgroundColor() }]}>
+      {/* Gestionnaire d'état d'application pour le background */}
+      <AppStateHandler 
+        onForeground={handleAppForeground} 
+        enabled={isRunning}
+      />
+      
       <View style={styles.safeArea}>
         {!isRunning ? (
           <View style={styles.setup}>

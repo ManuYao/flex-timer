@@ -1,3 +1,4 @@
+// Source: src/components/AMRAP.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, Alert, Dimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -5,6 +6,7 @@ import { COLORS, SIZES } from '../constants/theme';
 import { stopAllSounds, unloadSound, playCountdownSound, playAlertSound } from '../utils/sound';
 import NumberPicker from './common/NumberPicker';
 import { TimerProps } from '../types';
+import AppStateHandler from '../utils/AppStateHandler';
 
 const { width } = Dimensions.get('window');
 const CIRCLE_SIZE = width * 0.75;
@@ -43,6 +45,13 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isComponentMountedRef = useRef<boolean>(true);
   const lastCountdownRef = useRef<number>(0);
+  // Référence pour le mode actuel (pour le débogage et la gestion d'états en arrière-plan)
+  const modeRef = useRef<'countdown' | 'work' | 'rest' | 'idle'>('idle');
+
+  // Logger avec préfixe pour faciliter le débogage
+  const log = (message: string, data?: any) => {
+    console.log(`[AMRAP] ${message}`, data !== undefined ? data : '');
+  };
 
   const openNumberPicker = useCallback((target: 'duration' | 'work' | 'rest') => {
     let config = {
@@ -101,20 +110,16 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   }, []);
 
-  const pauseTimer = useCallback(() => {
-    if (countdown === 0) {
-      if (!isPaused) {
-        stopAllSounds().catch(console.error);
-      }
-      setIsPaused(!isPaused);
-    }
-  }, [countdown, isPaused]);
-
-  const resetTimer = useCallback(() => {
+  // Fonction pour arrêter tous les timers
+  const stopAllTimers = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
+  }, []);
+
+  const resetTimer = useCallback(() => {
+    stopAllTimers();
     
     stopAllSounds().catch(console.error);
     
@@ -124,7 +129,18 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
     setElapsedTime(0);
     setCountdown(DEFAULT_VALUES.COUNTDOWN);
     setIsResting(false);
-  }, [workTime]);
+    modeRef.current = 'idle';
+  }, [stopAllTimers, workTime]);
+
+  const pauseTimer = useCallback(() => {
+    if (countdown === 0) {
+      if (!isPaused) {
+        stopAllSounds().catch(console.error);
+        stopAllTimers();
+      }
+      setIsPaused(!isPaused);
+    }
+  }, [countdown, isPaused, stopAllTimers]);
 
   const startTimer = useCallback(() => {
     if (isInfiniteMode) {
@@ -143,6 +159,7 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
       }
     }
     
+    log('▶️ Démarrage du timer');
     stopAllSounds().catch(console.error);
     lastCountdownRef.current = 0;
     
@@ -152,21 +169,200 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
     setIsPaused(false);
     setCountdown(DEFAULT_VALUES.COUNTDOWN);
     setIsResting(false);
+    modeRef.current = 'countdown';
   }, [isInfiniteMode, totalDuration, workTime, restTime]);
 
   const handleNextPhase = useCallback(() => {
     if (isRunning && countdown === 0 && !isInfiniteMode) {
+      log('🔄 Changement manuel de phase');
       stopAllSounds().catch(console.error);
       
       setIsResting(!isResting);
       
       if (!isResting) {
         setCurrentTime(parseInt(restTime));
+        modeRef.current = 'rest';
       } else {
         setCurrentTime(parseInt(workTime));
+        modeRef.current = 'work';
       }
     }
   }, [isRunning, countdown, isInfiniteMode, isResting, restTime, workTime]);
+
+  // Gestion du temps passé en arrière-plan avec transitions automatiques
+  const handleAppForeground = useCallback((timeInBackground: number) => {
+    if (!isRunning || !isComponentMountedRef.current) return;
+    
+    // Logs d'entrée clairs et visibles
+    console.log('┌─────────────────────────────────────────────────┐');
+    console.log(`│ [AMRAP] 🔄 RETOUR AU PREMIER PLAN                │`);
+    console.log(`│ Temps passé en arrière-plan: ${(timeInBackground/1000).toFixed(1)}s │`);
+    console.log('└─────────────────────────────────────────────────┘');
+    log(`État avant ajustement: mode=${modeRef.current}, isResting=${isResting}, currentTime=${currentTime}, elapsedTime=${elapsedTime}, isPaused=${isPaused}`);
+    
+    if (isPaused) {
+      log('⏸️ Timer en pause, pas de mise à jour nécessaire');
+      return;
+    }
+    
+    const secondsInBackground = Math.floor(timeInBackground / 1000);
+    log(`Ajustement pour ${secondsInBackground} secondes écoulées en arrière-plan`);
+    
+    // Stopper l'intervalle actuel pendant les ajustements
+    stopAllTimers();
+    
+    // Gérer différemment selon le mode
+    if (countdown > 0) {
+      // Si on est en décompte initial
+      log(`Mode DÉCOMPTE: ${countdown}s restantes`);
+      
+      let newCountdown = countdown - secondsInBackground;
+      log(`Décompte ajusté: ${countdown} → ${Math.max(0, newCountdown)}`);
+      
+      if (newCountdown <= 0) {
+        // Le décompte est terminé pendant l'arrière-plan
+        console.log('┌─────────────────────────────────────┐');
+        console.log(`│ [AMRAP] 🔄 TRANSITION AUTOMATIQUE    │`);
+        console.log(`│ DÉCOMPTE → TRAVAIL                  │`);
+        console.log('└─────────────────────────────────────┘');
+        
+        // Mise à jour des états
+        setCountdown(0);
+        
+        if (isInfiniteMode) {
+          // Mode infini: ajuster le temps écoulé en arrière-plan
+          const timeLeft = parseInt(totalDuration) * 60 - Math.abs(newCountdown);
+          log(`Mode infini: temps restant: ${timeLeft}s`);
+          setCurrentTime(Math.max(0, timeLeft));
+          
+          if (timeLeft <= 0) {
+            // L'entraînement s'est terminé en arrière-plan
+            log('🏁 Entraînement terminé en arrière-plan');
+            resetTimer();
+            if (onComplete) onComplete();
+            
+            setTimeout(() => {
+              Alert.alert('Terminé', 'Entraînement terminé !');
+            }, 100);
+            
+            return;
+          }
+        } else {
+          // Mode avec travail/repos
+          const timeElapsedAfterCountdown = Math.abs(newCountdown);
+          
+          // Ajuster le temps de travail et l'avancement global
+          setCurrentTime(Math.max(0, parseInt(workTime) - timeElapsedAfterCountdown));
+          setElapsedTime(timeElapsedAfterCountdown);
+          
+          // Si le temps de travail est déjà épuisé, passer au repos
+          if (parseInt(workTime) - timeElapsedAfterCountdown <= 0) {
+            handlePhaseTransitionInBackground(timeElapsedAfterCountdown - parseInt(workTime));
+            return;
+          }
+        }
+        
+        modeRef.current = 'work';
+      } else {
+        setCountdown(newCountdown);
+      }
+    } else if (isInfiniteMode) {
+      // Mode infini - décrémenter le temps
+      const newTime = Math.max(0, currentTime - secondsInBackground);
+      log(`Mode infini: ${currentTime}s → ${newTime}s`);
+      setCurrentTime(newTime);
+      
+      if (newTime === 0) {
+        // L'entraînement s'est terminé en arrière-plan
+        log('🏁 Entraînement terminé en arrière-plan (mode infini)');
+        resetTimer();
+        if (onComplete) onComplete();
+        
+        setTimeout(() => {
+          Alert.alert('Terminé', 'Entraînement terminé !');
+        }, 100);
+        
+        return;
+      }
+    } else {
+      // Mode avec alternance travail/repos
+      const totalDurationSecs = parseInt(totalDuration) * 60;
+      
+      // Mettre à jour le temps écoulé
+      let newElapsedTime = elapsedTime + secondsInBackground;
+      log(`Temps écoulé: ${elapsedTime}s → ${newElapsedTime}s / ${totalDurationSecs}s`);
+      
+      // Vérifier si l'entraînement est terminé
+      if (newElapsedTime >= totalDurationSecs) {
+        log('🏁 Entraînement terminé en arrière-plan (durée totale atteinte)');
+        resetTimer();
+        if (onComplete) onComplete();
+        
+        setTimeout(() => {
+          Alert.alert('Terminé', 'Entraînement terminé !');
+        }, 100);
+        
+        return;
+      }
+      
+      // Mettre à jour le temps courant de la phase actuelle
+      let remainingInPhase = currentTime - secondsInBackground;
+      log(`Temps restant dans la phase actuelle: ${currentTime}s → ${remainingInPhase}s (${isResting ? 'repos' : 'travail'})`);
+      
+      // Si la phase actuelle est terminée, gérer la transition
+      if (remainingInPhase <= 0) {
+        handlePhaseTransitionInBackground(Math.abs(remainingInPhase));
+      } else {
+        setCurrentTime(remainingInPhase);
+        setElapsedTime(newElapsedTime);
+      }
+    }
+  }, [isRunning, isPaused, countdown, isResting, currentTime, elapsedTime, isInfiniteMode, totalDuration, workTime, resetTimer, onComplete, stopAllTimers]);
+  
+  // Fonction auxiliaire pour gérer les transitions de phase en arrière-plan
+  const handlePhaseTransitionInBackground = useCallback((timeAfterPhase: number) => {
+    log(`Gestion d'une transition de phase en arrière-plan, temps après phase: ${timeAfterPhase}s`);
+    
+    if (isResting) {
+      // Transition repos → travail
+      console.log('┌───────────────────────────────────────┐');
+      console.log(`│ [AMRAP] 🔄 TRANSITION AUTOMATIQUE      │`);
+      console.log(`│ REPOS → TRAVAIL                       │`);
+      console.log('└───────────────────────────────────────┘');
+      
+      setIsResting(false);
+      modeRef.current = 'work';
+      
+      // Calculer le temps restant dans la nouvelle phase de travail
+      const newWorkTime = Math.max(0, parseInt(workTime) - timeAfterPhase);
+      log(`Nouveau temps de travail: ${newWorkTime}s`);
+      setCurrentTime(newWorkTime);
+      
+      // Si ce temps de travail est déjà écoulé, gérer une nouvelle transition
+      if (newWorkTime <= 0) {
+        handlePhaseTransitionInBackground(Math.abs(newWorkTime));
+      }
+    } else {
+      // Transition travail → repos
+      console.log('┌───────────────────────────────────────┐');
+      console.log(`│ [AMRAP] 🔄 TRANSITION AUTOMATIQUE      │`);
+      console.log(`│ TRAVAIL → REPOS                       │`);
+      console.log('└───────────────────────────────────────┘');
+      
+      setIsResting(true);
+      modeRef.current = 'rest';
+      
+      // Calculer le temps restant dans la nouvelle phase de repos
+      const newRestTime = Math.max(0, parseInt(restTime) - timeAfterPhase);
+      log(`Nouveau temps de repos: ${newRestTime}s`);
+      setCurrentTime(newRestTime);
+      
+      // Si ce temps de repos est déjà écoulé, gérer une nouvelle transition
+      if (newRestTime <= 0) {
+        handlePhaseTransitionInBackground(Math.abs(newRestTime));
+      }
+    }
+  }, [isResting, workTime, restTime]);
 
   const getPhaseColor = useCallback((): string => {
     if (countdown > 0) return COLORS.warning;
@@ -188,14 +384,10 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
       
       return () => {
         isComponentMountedRef.current = false;
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
-        
+        stopAllTimers();
         stopAllSounds().catch(console.error);
       };
-    }, [])
+    }, [stopAllTimers])
   );
 
   useEffect(() => {
@@ -210,10 +402,12 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
       }
 
       if (countdown > 0) {
+        log('Démarrage du décompte initial');
         intervalRef.current = setInterval(() => {
           setCountdown(prev => prev - 1);
         }, 1000);
       } else {
+        log(`Démarrage du timer en mode ${isResting ? 'repos' : 'travail'}`);
         intervalRef.current = setInterval(() => {
           setCurrentTime(prev => {
             const currentPhaseTime = isInfiniteMode ? 
@@ -243,9 +437,11 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
               
               if (isResting) {
                 setIsResting(false);
+                modeRef.current = 'work';
                 return parseInt(workTime);
               } else {
                 setIsResting(true);
+                modeRef.current = 'rest';
                 return parseInt(restTime);
               }
             }
@@ -283,6 +479,12 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
 
   return (
     <View style={[styles.container, { backgroundColor: getBackgroundColor() }]}>
+      {/* Gestionnaire d'état d'application pour le background */}
+      <AppStateHandler 
+        onForeground={handleAppForeground}
+        enabled={isRunning} 
+      />
+      
       <View style={styles.safeArea}>
         {!isRunning ? (
           <View style={styles.setup}>

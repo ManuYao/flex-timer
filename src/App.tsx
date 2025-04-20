@@ -1,4 +1,5 @@
-import { LinkingOptions, NavigationContainer } from "@react-navigation/native";
+// Source: src/App.tsx
+import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
 import { useColorScheme } from "react-native";
@@ -14,16 +15,25 @@ import TABATA from "@/components/TABATA";
 import MIX from "@/components/MIX";
 import { initializeAudio, cleanupSounds } from "@/utils/sound";
 import ErrorBoundary from "@/components/common/ErrorBoundary";
+import * as KeepAwake from 'expo-keep-awake';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
+  
   useEffect(() => {
+    // Initialiser le système audio
     initializeAudio();
+    
+    // Empêcher l'écran de s'éteindre pendant l'utilisation de l'application
+    KeepAwake.activateKeepAwake();
+    
     return () => {
+      // Nettoyage des ressources
       cleanupSounds();
+      KeepAwake.deactivateKeepAwake();
     };
   }, []);
 

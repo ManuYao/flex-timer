@@ -1,3 +1,4 @@
+// Source: src/components/EMOM.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, Alert, Dimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -5,6 +6,7 @@ import { COLORS, SIZES } from '../constants/theme';
 import { stopAllSounds, unloadSound, playCountdownSound, playAlertSound } from '../utils/sound';
 import NumberPicker from './common/NumberPicker';
 import { TimerProps } from '../types';
+import AppStateHandler from '../utils/AppStateHandler';
 
 const { width } = Dimensions.get('window');
 const CIRCLE_SIZE = width * 0.75;
@@ -39,6 +41,13 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isComponentMountedRef = useRef<boolean>(true);
   const lastCountdownRef = useRef<number>(0);
+  // Référence pour le mode actuel
+  const modeRef = useRef<'countdown' | 'exercise' | 'idle'>('idle');
+
+  // Logger avec préfixe pour faciliter le débogage
+  const log = (message: string, data?: any) => {
+    console.log(`[EMOM] ${message}`, data !== undefined ? data : '');
+  };
 
   const openNumberPicker = useCallback((target: 'rounds' | 'interval') => {
     let config = {
@@ -81,6 +90,27 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   }, []);
 
+  // Fonction pour arrêter tous les timers
+  const stopAllTimers = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
+
+  const resetTimer = useCallback(() => {
+    stopAllTimers();
+    
+    stopAllSounds().catch(console.error);
+    
+    setIsRunning(false);
+    setIsPaused(false);
+    setCurrentRound(1);
+    setCurrentTime(parseInt(intervalTime));
+    setCountdown(DEFAULT_VALUES.COUNTDOWN);
+    modeRef.current = 'idle';
+  }, [intervalTime, stopAllTimers]);
+
   const startTimer = useCallback(() => {
     const roundsValue = parseInt(rounds);
     const intervalValue = parseInt(intervalTime);
@@ -90,6 +120,7 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
       return;
     }
     
+    log('▶️ Démarrage du timer EMOM');
     stopAllSounds().catch(console.error);
     lastCountdownRef.current = 0;
     
@@ -98,31 +129,148 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
     setCurrentTime(intervalValue);
     setCountdown(DEFAULT_VALUES.COUNTDOWN);
     setIsPaused(false);
-  }, [rounds, intervalTime]);
-
-  const resetTimer = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    
-    stopAllSounds().catch(console.error);
-    
-    setIsRunning(false);
-    setIsPaused(false);
-    setCurrentRound(1);
-    setCurrentTime(parseInt(intervalTime));
-    setCountdown(DEFAULT_VALUES.COUNTDOWN);
-  }, [intervalTime]);
+    modeRef.current = 'countdown';
+  }, [rounds, intervalTime, stopAllTimers]);
 
   const handleCirclePress = useCallback(() => {
     if (isRunning && countdown === 0) {
       if (!isPaused) {
         stopAllSounds().catch(console.error);
+        stopAllTimers();
       }
       setIsPaused(!isPaused);
     }
-  }, [isRunning, countdown, isPaused]);
+  }, [isRunning, countdown, isPaused, stopAllTimers]);
+
+  // Gestion du temps passé en arrière-plan
+  const handleAppForeground = useCallback((timeInBackground: number) => {
+    if (!isRunning || !isComponentMountedRef.current) return;
+    
+    // Logs d'entrée clairs et visibles
+    console.log('┌─────────────────────────────────────────────────┐');
+    console.log(`│ [EMOM] 🔄 RETOUR AU PREMIER PLAN                 │`);
+    console.log(`│ Temps passé en arrière-plan: ${(timeInBackground/1000).toFixed(1)}s │`);
+    console.log('└─────────────────────────────────────────────────┘');
+    log(`État avant ajustement: mode=${modeRef.current}, round=${currentRound}/${rounds}, time=${currentTime}, isPaused=${isPaused}`);
+    
+    if (isPaused) {
+      log('⏸️ Timer en pause, pas de mise à jour nécessaire');
+      return;
+    }
+    
+    const secondsInBackground = Math.floor(timeInBackground / 1000);
+    log(`Ajustement pour ${secondsInBackground} secondes écoulées en arrière-plan`);
+    
+    // Stopper l'intervalle actuel pendant les ajustements
+    stopAllTimers();
+    
+    // Gérer différemment selon le mode
+    if (countdown > 0) {
+      // Si on est en décompte initial
+      log(`Mode DÉCOMPTE: ${countdown}s restantes`);
+      
+      const newCountdown = Math.max(0, countdown - secondsInBackground);
+      log(`Décompte ajusté: ${countdown} → ${newCountdown}`);
+      
+      if (newCountdown <= 0) {
+        // Le décompte est terminé pendant l'arrière-plan
+        console.log('┌─────────────────────────────────────┐');
+        console.log(`│ [EMOM] 🔄 TRANSITION AUTOMATIQUE     │`);
+        console.log(`│ DÉCOMPTE → EXERCICE                 │`);
+        console.log('└─────────────────────────────────────┘');
+        
+        // Mise à jour des états
+        setCountdown(0);
+        modeRef.current = 'exercise';
+        
+        // Calculer combien de temps s'est écoulé après le décompte
+        const timeAfterCountdown = secondsInBackground - countdown;
+        log(`Temps écoulé après le décompte: ${timeAfterCountdown}s`);
+        
+        // Ajuster l'intervalle actuel
+        const intervalValue = parseInt(intervalTime);
+        const newTime = Math.max(1, intervalValue - timeAfterCountdown);
+        
+        log(`Premier intervalle ajusté: ${newTime}s restantes`);
+        setCurrentTime(newTime);
+        
+        // Si le premier intervalle s'est terminé
+        if (timeAfterCountdown >= intervalValue) {
+          // Calculer combien d'intervalles complets se sont écoulés
+          const completedIntervals = Math.floor(timeAfterCountdown / intervalValue);
+          const newRound = Math.min(parseInt(rounds), 1 + completedIntervals);
+          log(`${completedIntervals} intervalles complets écoulés, nouveau round: ${newRound}`);
+          
+          // Vérifier si l'entraînement est terminé
+          if (newRound > parseInt(rounds)) {
+            log('🏁 Entraînement terminé en arrière-plan');
+            resetTimer();
+            if (onComplete) onComplete();
+            
+            setTimeout(() => {
+              Alert.alert('Terminé', 'Entraînement terminé !');
+            }, 100);
+            
+            return;
+          }
+          
+          // Mettre à jour le round et calculer le temps restant dans ce round
+          setCurrentRound(newRound);
+          const timeInCurrentInterval = timeAfterCountdown % intervalValue;
+          const timeLeftInCurrentInterval = intervalValue - timeInCurrentInterval;
+          log(`Temps restant dans l'intervalle actuel: ${timeLeftInCurrentInterval}s`);
+          setCurrentTime(Math.max(1, timeLeftInCurrentInterval)); // Au moins 1 seconde pour éviter 0
+        }
+      } else {
+        // Le décompte n'est pas terminé
+        setCountdown(newCountdown);
+      }
+    } else {
+      // En mode exercise - Gérer les intervalles
+      const intervalValue = parseInt(intervalTime);
+      
+      // Si le temps écoulé en arrière-plan est inférieur au temps restant actuel
+      if (secondsInBackground < currentTime) {
+        // Simplement ajuster le temps restant dans l'intervalle actuel
+        const newTime = currentTime - secondsInBackground;
+        log(`Ajustement simple: ${currentTime}s → ${newTime}s`);
+        setCurrentTime(Math.max(1, newTime)); // Au moins 1 seconde
+      } else {
+        // Des intervalles complets ont pu s'écouler
+        
+        // Calculer combien d'intervalles complets (rounds) ont été parcourus
+        const timeNeededToFinishCurrentInterval = currentTime;
+        const remainingTime = secondsInBackground - timeNeededToFinishCurrentInterval;
+        const additionalCompletedIntervals = Math.floor(remainingTime / intervalValue);
+        
+        // Nouveau round total
+        const newRound = Math.min(parseInt(rounds), currentRound + additionalCompletedIntervals + 1);
+        log(`Round ${currentRound} terminé + ${additionalCompletedIntervals} intervalles supplémentaires = Round ${newRound}`);
+        
+        // Vérifier si l'entraînement est terminé
+        if (newRound > parseInt(rounds)) {
+          log('🏁 Entraînement terminé en arrière-plan');
+          resetTimer();
+          if (onComplete) onComplete();
+          
+          setTimeout(() => {
+            Alert.alert('Terminé', 'Entraînement terminé !');
+          }, 100);
+          
+          return;
+        }
+        
+        // Mettre à jour le round et calculer le temps restant dans ce round
+        setCurrentRound(newRound);
+        
+        // Calculer le temps écoulé dans l'intervalle actuel
+        const timeInCurrentInterval = remainingTime % intervalValue;
+        const timeLeftInCurrentInterval = intervalValue - timeInCurrentInterval;
+        log(`Temps restant dans l'intervalle actuel: ${timeLeftInCurrentInterval}s`);
+        setCurrentTime(Math.max(1, timeLeftInCurrentInterval)); // Au moins 1 seconde
+      }
+    }
+  }, [isRunning, isPaused, countdown, currentRound, currentTime, rounds, intervalTime, resetTimer, onComplete, stopAllTimers]);
 
   const getPhaseColor = useCallback(() => {
     if (countdown > 0) return COLORS.warning;
@@ -144,14 +292,10 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
       
       return () => {
         isComponentMountedRef.current = false;
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
-        
+        stopAllTimers();
         stopAllSounds().catch(console.error);
       };
-    }, [])
+    }, [stopAllTimers])
   );
 
   useEffect(() => {
@@ -166,10 +310,12 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
       }
 
       if (countdown > 0) {
+        log('Démarrage du décompte initial');
         intervalRef.current = setInterval(() => {
           setCountdown(prev => prev - 1);
         }, 1000);
       } else {
+        log(`Démarrage du timer EMOM: Round ${currentRound}/${rounds}, temps: ${currentTime}s`);
         intervalRef.current = setInterval(() => {
           setCurrentTime(prev => {
             const midPoint = Math.floor(parseInt(intervalTime) / 2);
@@ -214,6 +360,12 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
 
   return (
     <View style={[styles.container, { backgroundColor: getBackgroundColor() }]}>
+      {/* Gestionnaire d'état d'application pour le background */}
+      <AppStateHandler 
+        onForeground={handleAppForeground} 
+        enabled={isRunning}
+      />
+      
       <View style={styles.safeArea}>
         {!isRunning ? (
           <View style={styles.setup}>
