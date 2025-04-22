@@ -20,8 +20,8 @@ interface NumberPickerProps {
   initialValue?: number;
   onConfirm: (value: number) => void;
   visible: boolean;
-  formatAsTime?: boolean; // Propriété pour activer le format minutes/secondes
-  unit?: string; // Pour afficher l'unité (SEC, MIN, etc.)
+  formatAsTime?: boolean;
+  unit?: string;
 }
 
 const NumberPicker = memo(({ 
@@ -30,17 +30,73 @@ const NumberPicker = memo(({
   initialValue = 5,
   onConfirm,
   visible = false,
-  formatAsTime = false, // Par défaut, on n'applique pas le formatage de temps
+  formatAsTime = false,
   unit = "SEC"
 }: NumberPickerProps) => {
   const [selectedValue, setSelectedValue] = useState(initialValue);
   const scrollViewRef = useRef<ScrollView>(null);
   
-  const numbers = React.useMemo(() => 
-    Array.from(
-      { length: maxValue - minValue + 1 },
-      (_, i) => minValue + i
-    ), [minValue, maxValue]);
+  // Générer les valeurs avec des incréments de 5, 10, 15, 30, 60 selon la plage
+  const generateValues = React.useMemo(() => {
+    const values = [];
+    
+    // Moins d'une minute: incrément de 5s
+    for (let i = Math.max(5, minValue); i <= Math.min(60, maxValue); i += 5) {
+      values.push(i);
+    }
+    
+    // 1-2 minutes: incrément de 10s
+    for (let i = Math.max(60, minValue); i <= Math.min(120, maxValue); i += 10) {
+      if (!values.includes(i)) values.push(i);
+    }
+    
+    // 2-5 minutes: incrément de 15s
+    for (let i = Math.max(120, minValue); i <= Math.min(300, maxValue); i += 15) {
+      if (!values.includes(i)) values.push(i);
+    }
+    
+    // 5-10 minutes: incrément de 30s
+    for (let i = Math.max(300, minValue); i <= Math.min(600, maxValue); i += 30) {
+      if (!values.includes(i)) values.push(i);
+    }
+    
+    // Plus de 10 minutes: incrément de 60s
+    for (let i = Math.max(600, minValue); i <= maxValue; i += 60) {
+      if (!values.includes(i)) values.push(i);
+    }
+    
+    // Assurer que minValue et maxValue sont inclus
+    if (minValue < values[0]) {
+      values.unshift(minValue);
+    }
+    
+    if (maxValue > values[values.length - 1]) {
+      values.push(maxValue);
+    }
+    
+    return values.sort((a, b) => a - b);
+  }, [minValue, maxValue]);
+  
+  const findClosestValueIndex = React.useCallback((value: number) => {
+    if (generateValues.includes(value)) {
+      return generateValues.indexOf(value);
+    }
+    
+    let closestValue = generateValues[0];
+    let closestDiff = Math.abs(value - closestValue);
+    let closestIndex = 0;
+    
+    for (let i = 1; i < generateValues.length; i++) {
+      const diff = Math.abs(value - generateValues[i]);
+      if (diff < closestDiff) {
+        closestDiff = diff;
+        closestValue = generateValues[i];
+        closestIndex = i;
+      }
+    }
+    
+    return closestIndex;
+  }, [generateValues]);
   
   useEffect(() => {
     if (visible) {
@@ -48,22 +104,22 @@ const NumberPicker = memo(({
       
       setTimeout(() => {
         if (scrollViewRef.current) {
-          const scrollToIndex = initialValue - minValue;
+          const index = findClosestValueIndex(initialValue);
           scrollViewRef.current.scrollTo({
-            y: scrollToIndex * ITEM_HEIGHT,
+            y: index * ITEM_HEIGHT,
             animated: false
           });
         }
       }, 50);
     }
-  }, [visible, initialValue, minValue]);
+  }, [visible, initialValue, findClosestValueIndex]);
   
   const handleScroll = (event: { nativeEvent: { contentOffset: { y: number; }; }; }) => {
     const offsetY = event.nativeEvent.contentOffset.y;
     const index = Math.round(offsetY / ITEM_HEIGHT);
     
-    if (index >= 0 && index < numbers.length) {
-      const newValue = numbers[index];
+    if (index >= 0 && index < generateValues.length) {
+      const newValue = generateValues[index];
       setSelectedValue(newValue);
     }
   };
@@ -72,8 +128,8 @@ const NumberPicker = memo(({
     onConfirm(selectedValue);
   };
   
-  // Fonction pour formater la valeur en format numérique MM:SS
-  const formatValue = (value: number): string => {
+  // Formater le temps en MM:SS dès qu'on dépasse 60 secondes
+  const formatTimeValue = (value: number): string => {
     if (formatAsTime && value >= 60) {
       const minutes = Math.floor(value / 60);
       const seconds = value % 60;
@@ -82,9 +138,12 @@ const NumberPicker = memo(({
     return String(value);
   };
 
-  // Gestion de l'affichage des unités - aucune unité affichée
-  const getUnitDisplay = (value: number): string => {
-    return ""; // Aucune unité affichée
+  // Fonction pour déterminer dynamiquement l'unité à afficher
+  const getDisplayUnit = (value: number): string => {
+    if (formatAsTime && value >= 60) {
+      return "MIN";
+    }
+    return unit;
   };
 
   return (
@@ -111,20 +170,17 @@ const NumberPicker = memo(({
             >
               <View style={{height: ITEM_HEIGHT * 2}} />
               
-              {numbers.map((num) => (
+              {generateValues.map((num) => (
                 <View key={num} style={styles.numberItem}>
                   <Text style={[
                     styles.numberText,
                     selectedValue === num && styles.selectedNumberText
                   ]}>
-                    {formatValue(num)}
+                    {formatTimeValue(num)}
                   </Text>
-                  {getUnitDisplay(num) && (
-                    <Text style={[
-                      styles.unitText,
-                      selectedValue === num && styles.selectedUnitText
-                    ]}>
-                      {getUnitDisplay(num)}
+                  {selectedValue === num && (
+                    <Text style={styles.unitText}>
+                      {getDisplayUnit(num)}
                     </Text>
                   )}
                 </View>
@@ -201,7 +257,6 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.5)', 
     fontWeight: '300',
     textAlign: 'center',
-    marginRight: 8,
   },
   selectedNumberText: {
     fontSize: 40,
@@ -213,12 +268,9 @@ const styles = StyleSheet.create({
   },
   unitText: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.4)',
-    fontWeight: '300',
-  },
-  selectedUnitText: {
     color: 'rgba(255,255,255,0.8)',
     fontWeight: '500',
+    marginLeft: 8,
   },
   confirmButton: {
     width: '100%',

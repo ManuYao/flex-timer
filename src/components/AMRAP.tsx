@@ -53,6 +53,24 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
     console.log(`[AMRAP] ${message}`, data !== undefined ? data : '');
   };
 
+  // Fonction pour formater le temps MM:SS et afficher correctement les durées
+  const formatTime = useCallback((time: number): string => {
+    const minutes = Math.floor(time / 60);
+    const seconds = time % 60;
+    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+  }, []);
+  
+  // Fonction pour formater la durée affichée dans le cercle
+  const formatDuration = useCallback((timeStr: string): string => {
+    const value = parseInt(timeStr);
+    if (value >= 60) {
+      const minutes = Math.floor(value / 60);
+      const seconds = value % 60;
+      return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    }
+    return timeStr;
+  }, []);
+
   const openNumberPicker = useCallback((target: 'duration' | 'work' | 'rest') => {
     let config = {
       minValue: 1,
@@ -64,7 +82,7 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
       case 'duration':
         config = {
           minValue: 1,
-          maxValue: 180,
+          maxValue: 1800, // Augmenté à 1800 secondes (30 minutes)
           initialValue: parseInt(totalDuration)
         };
         break;
@@ -104,10 +122,14 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
     setPickerVisible(false);
   }, [pickerTarget]);
 
-  const formatTime = useCallback((time: number): string => {
-    const minutes = Math.floor(time / 60);
-    const seconds = time % 60;
-    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+  const formatDisplayValue = useCallback((timeStr: string): string => {
+    const value = parseInt(timeStr);
+    if (value >= 60) {
+      const minutes = Math.floor(value / 60);
+      const seconds = value % 60;
+      return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    }
+    return timeStr;
   }, []);
 
   // Fonction pour arrêter tous les timers
@@ -498,22 +520,29 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
             </TouchableOpacity>
 
             <View style={styles.circleContainer}>
-              <TouchableOpacity 
-                activeOpacity={0.8}
-                onPress={() => openNumberPicker('duration')}
-              >
-                <View style={[styles.circle, styles.setupCircle]}>
-                  <View style={styles.inputWrapper}>
-                    <Text style={styles.phaseText}>DURÉE</Text>
-                    <View style={[styles.circleInputContainer, { width: '100%' }]}>
-                      <Text style={styles.circleInput}>
-                        {totalDuration}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            </View>
+  <TouchableOpacity 
+    activeOpacity={0.8}
+    onPress={() => openNumberPicker('duration')}
+  >
+    <View style={[styles.circle, styles.setupCircle]}>
+      <View style={styles.inputWrapper}>
+        <Text style={styles.phaseText}>DURÉE</Text>
+        <View style={[styles.circleInputContainer, { width: '100%' }]}>
+          {parseInt(totalDuration) >= 60 ? (
+            <Text style={styles.circleInput}>
+              {Math.floor(parseInt(totalDuration) / 60)}:
+              {(parseInt(totalDuration) % 60).toString().padStart(2, '0')}
+            </Text>
+          ) : (
+            <Text style={styles.circleInput}>
+              {formatDisplayValue(totalDuration)}
+          </Text>
+          )}
+        </View>
+      </View>
+    </View>
+  </TouchableOpacity>
+</View>
 
             {!isInfiniteMode && (
               <View style={styles.rowContainer}>
@@ -524,9 +553,9 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
                 >
                   <Text style={styles.label}>TRAVAIL</Text>
                   <View style={styles.inputWrapper}>
-                    <Text style={styles.input}>
-                      {workTime}
-                    </Text>
+                  <Text style={styles.input}>
+                  {formatDisplayValue(workTime)}
+                  </Text>
                   </View>
                   <Text style={styles.unit}>SEC</Text>
                 </TouchableOpacity>
@@ -538,9 +567,9 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
                 >
                   <Text style={styles.label}>REPOS</Text>
                   <View style={styles.inputWrapper}>
-                    <Text style={styles.input}>
-                      {restTime}
-                    </Text>
+                  <Text style={styles.input}>
+  {formatDisplayValue(restTime)}
+</Text>
                   </View>
                   <Text style={styles.unit}>SEC</Text>
                 </TouchableOpacity>
@@ -603,14 +632,15 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
         )}
       </View>
       
+      {/* NumberPicker amélioré */}
       <NumberPicker
         visible={pickerVisible}
         initialValue={pickerConfig.initialValue}
         minValue={pickerConfig.minValue}
         maxValue={pickerConfig.maxValue}
         onConfirm={handlePickerConfirm}
-        formatAsTime={pickerTarget === 'work' || pickerTarget === 'rest' || pickerTarget === 'duration'}
-        unit="SEC"
+        formatAsTime={true}
+        unit={pickerTarget === 'duration' ? "MIN" : "SEC"}
       />
     </View>
   );
