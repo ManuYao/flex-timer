@@ -1,4 +1,3 @@
-// Source: src/components/AMRAP.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, Alert, Dimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -520,29 +519,29 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
             </TouchableOpacity>
 
             <View style={styles.circleContainer}>
-  <TouchableOpacity 
-    activeOpacity={0.8}
-    onPress={() => openNumberPicker('duration')}
-  >
-    <View style={[styles.circle, styles.setupCircle]}>
-      <View style={styles.inputWrapper}>
-        <Text style={styles.phaseText}>DURÉE</Text>
-        <View style={[styles.circleInputContainer, { width: '100%' }]}>
-          {parseInt(totalDuration) >= 60 ? (
-            <Text style={styles.circleInput}>
-              {Math.floor(parseInt(totalDuration) / 60)}:
-              {(parseInt(totalDuration) % 60).toString().padStart(2, '0')}
-            </Text>
-          ) : (
-            <Text style={styles.circleInput}>
-              {formatDisplayValue(totalDuration)}
-          </Text>
-          )}
-        </View>
-      </View>
-    </View>
-  </TouchableOpacity>
-</View>
+              <TouchableOpacity 
+                activeOpacity={0.8}
+                onPress={() => openNumberPicker('duration')}
+              >
+                <View style={[styles.circle, styles.setupCircle]}>
+                  <View style={styles.inputWrapper}>
+                    <Text style={styles.phaseText}>DURÉE</Text>
+                    <View style={[styles.circleInputContainer, { width: '100%' }]}>
+                      {parseInt(totalDuration) >= 60 ? (
+                        <Text style={styles.circleInput}>
+                          {Math.floor(parseInt(totalDuration) / 60)}:
+                          {(parseInt(totalDuration) % 60).toString().padStart(2, '0')}
+                        </Text>
+                      ) : (
+                        <Text style={styles.circleInput}>
+                          {formatDisplayValue(totalDuration)}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            </View>
 
             {!isInfiniteMode && (
               <View style={styles.rowContainer}>
@@ -553,9 +552,9 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
                 >
                   <Text style={styles.label}>TRAVAIL</Text>
                   <View style={styles.inputWrapper}>
-                  <Text style={styles.input}>
-                  {formatDisplayValue(workTime)}
-                  </Text>
+                    <Text style={styles.input}>
+                      {formatDisplayValue(workTime)}
+                    </Text>
                   </View>
                   <Text style={styles.unit}>SEC</Text>
                 </TouchableOpacity>
@@ -567,9 +566,9 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
                 >
                   <Text style={styles.label}>REPOS</Text>
                   <View style={styles.inputWrapper}>
-                  <Text style={styles.input}>
-  {formatDisplayValue(restTime)}
-</Text>
+                    <Text style={styles.input}>
+                      {formatDisplayValue(restTime)}
+                    </Text>
                   </View>
                   <Text style={styles.unit}>SEC</Text>
                 </TouchableOpacity>
@@ -639,8 +638,9 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
         minValue={pickerConfig.minValue}
         maxValue={pickerConfig.maxValue}
         onConfirm={handlePickerConfirm}
-        formatAsTime={true}
+        formatAsTime={pickerTarget === 'duration' ? true : true}
         unit={pickerTarget === 'duration' ? "MIN" : "SEC"}
+        stepValue={pickerTarget === 'duration' ? 1 : undefined}
       />
     </View>
   );

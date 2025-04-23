@@ -22,6 +22,8 @@ interface NumberPickerProps {
   visible: boolean;
   formatAsTime?: boolean;
   unit?: string;
+  stepValue?: number; // Nouvelle propriété pour incrément personnalisé
+  onCancel?: () => void; // Optionnel, pour gérer l'annulation
 }
 
 const NumberPicker = memo(({ 
@@ -31,15 +33,26 @@ const NumberPicker = memo(({
   onConfirm,
   visible = false,
   formatAsTime = false,
-  unit = "SEC"
+  unit = "SEC",
+  stepValue,
+  onCancel
 }: NumberPickerProps) => {
   const [selectedValue, setSelectedValue] = useState(initialValue);
   const scrollViewRef = useRef<ScrollView>(null);
   
-  // Générer les valeurs avec des incréments de 5, 10, 15, 30, 60 selon la plage
+  // Générer les valeurs avec soit un incrément fixe (stepValue) soit des incréments variables
   const generateValues = React.useMemo(() => {
     const values = [];
     
+    // Si stepValue est défini, on utilise cet incrément spécifique
+    if (stepValue) {
+      for (let i = minValue; i <= maxValue; i += stepValue) {
+        values.push(i);
+      }
+      return values;
+    }
+    
+    // Sinon on garde la logique actuelle
     // Moins d'une minute: incrément de 5s
     for (let i = Math.max(5, minValue); i <= Math.min(60, maxValue); i += 5) {
       values.push(i);
@@ -75,7 +88,7 @@ const NumberPicker = memo(({
     }
     
     return values.sort((a, b) => a - b);
-  }, [minValue, maxValue]);
+  }, [minValue, maxValue, stepValue]);
   
   const findClosestValueIndex = React.useCallback((value: number) => {
     if (generateValues.includes(value)) {
@@ -126,6 +139,10 @@ const NumberPicker = memo(({
   
   const handleConfirm = () => {
     onConfirm(selectedValue);
+  };
+
+  const handleCancel = () => {
+    if (onCancel) onCancel();
   };
   
   // Formater le temps en MM:SS dès qu'on dépasse 60 secondes
@@ -190,13 +207,24 @@ const NumberPicker = memo(({
             </ScrollView>
           </View>
           
-          <TouchableOpacity
-            style={styles.confirmButton}
-            onPress={handleConfirm}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.confirmButtonText}>OK</Text>
-          </TouchableOpacity>
+          <View style={styles.buttonContainer}>
+            {onCancel && (
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={handleCancel}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.cancelButtonText}>Annuler</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.confirmButton}
+              onPress={handleConfirm}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.confirmButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Modal>
@@ -272,12 +300,16 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginLeft: 8,
   },
-  confirmButton: {
+  buttonContainer: {
+    flexDirection: 'row',
     width: '100%',
     height: 60,
     backgroundColor: 'rgba(30,30,30,0.9)',
     borderTopWidth: 1,
     borderTopColor: 'rgba(100,100,100,0.3)',
+  },
+  confirmButton: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -286,6 +318,18 @@ const styles = StyleSheet.create({
     fontSize: SIZES.fontSize.subtitle,
     fontWeight: '500',
     letterSpacing: 1,
+  },
+  cancelButton: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(100,100,100,0.3)',
+  },
+  cancelButtonText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: SIZES.fontSize.subtitle,
+    fontWeight: '400',
   }
 });
 
