@@ -21,6 +21,12 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+      "UIBackgroundModes": ["audio"]
+        }
+    },
       "intentFilters": [
         {
           "action": "VIEW",
