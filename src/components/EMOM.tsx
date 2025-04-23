@@ -445,14 +445,15 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
       </View>
       
       <NumberPicker
-        visible={pickerVisible}
-        initialValue={pickerConfig.initialValue}
-        minValue={pickerConfig.minValue}
-        maxValue={pickerConfig.maxValue}
-        onConfirm={handlePickerConfirm}
-        formatAsTime={pickerTarget === 'interval'}
-        unit="SEC"
-      />
+  visible={pickerVisible}
+  initialValue={pickerConfig.initialValue}
+  minValue={pickerConfig.minValue}
+  maxValue={pickerConfig.maxValue}
+  onConfirm={handlePickerConfirm}
+  formatAsTime={pickerTarget === 'interval'}
+  unit={pickerTarget === 'rounds' ? '' : 'SEC'}
+  stepValue={pickerTarget === 'rounds' ? 1 : undefined}
+/>
     </View>
   );
 };

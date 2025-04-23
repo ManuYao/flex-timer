@@ -566,14 +566,15 @@ const ForTime = ({ onComplete }: TimerProps) => {
       </View>
       
       <NumberPicker
-        visible={pickerVisible}
-        initialValue={pickerConfig.initialValue}
-        minValue={pickerConfig.minValue}
-        maxValue={pickerConfig.maxValue}
-        onConfirm={handlePickerConfirm}
-        formatAsTime={pickerTarget === 'rest'}
-        unit="SEC"
-      />
+  visible={pickerVisible}
+  initialValue={pickerConfig.initialValue}
+  minValue={pickerConfig.minValue}
+  maxValue={pickerConfig.maxValue}
+  onConfirm={handlePickerConfirm}
+  formatAsTime={pickerTarget === 'rest'}
+  unit={pickerTarget === 'rounds' ? '' : 'SEC'}
+  stepValue={pickerTarget === 'rounds' ? 1 : undefined}
+/>
     </View>
   );
 };

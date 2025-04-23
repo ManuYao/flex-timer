@@ -568,14 +568,15 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
       </View>
       
       <NumberPicker
-        visible={pickerVisible}
-        initialValue={pickerConfig.initialValue}
-        minValue={pickerConfig.minValue}
-        maxValue={pickerConfig.maxValue}
-        onConfirm={handlePickerConfirm}
-        formatAsTime={pickerTarget === 'work' || pickerTarget === 'rest'}
-        unit="SEC"
-      />
+  visible={pickerVisible}
+  initialValue={pickerConfig.initialValue}
+  minValue={pickerConfig.minValue}
+  maxValue={pickerConfig.maxValue}
+  onConfirm={handlePickerConfirm}
+  formatAsTime={pickerTarget === 'work' || pickerTarget === 'rest'}
+  unit={pickerTarget === 'rounds' ? '' : 'SEC'}
+  stepValue={pickerTarget === 'rounds' ? 1 : undefined}
+/>
     </View>
   );
 };
