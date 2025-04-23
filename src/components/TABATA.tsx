@@ -62,6 +62,12 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
     console.log(`[TABATA] ${message}`, data !== undefined ? data : '');
   };
 
+  // Fonction pour déterminer l'unité à afficher en fonction de la valeur
+  const getDisplayUnit = useCallback((timeStr: string): string => {
+    const value = parseInt(timeStr);
+    return value >= 60 ? "MIN" : "SEC";
+  }, []);
+
   // Fonction pour arrêter tous les timers - définie en premier
   const stopAllTimers = useCallback(() => {
     if (intervalRef.current) {
@@ -77,6 +83,17 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
     const minutes = Math.floor(time / 60);
     const seconds = time % 60;
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+  }, []);
+
+  // Fonction pour formater les valeurs d'affichage (pour l'interface utilisateur)
+  const formatDisplayValue = useCallback((timeStr: string): string => {
+    const value = parseInt(timeStr);
+    if (value >= 60) {
+      const minutes = Math.floor(value / 60);
+      const seconds = value % 60;
+      return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    }
+    return timeStr;
   }, []);
 
   // Reset Timer (définie avant utilisation)
@@ -505,10 +522,10 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
                 <Text style={styles.label}>TRAVAIL</Text>
                 <View style={styles.inputWrapper}>
                   <Text style={styles.input}>
-                    {workTime}
+                    {formatDisplayValue(workTime)}
                   </Text>
                 </View>
-                <Text style={styles.unit}>SEC</Text>
+                <Text style={styles.unit}>{getDisplayUnit(workTime)}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity 
@@ -519,10 +536,10 @@ const TABATA: React.FC<TimerProps> = ({ onComplete }) => {
                 <Text style={styles.label}>REPOS</Text>
                 <View style={styles.inputWrapper}>
                   <Text style={styles.input}>
-                    {restTime}
+                    {formatDisplayValue(restTime)}
                   </Text>
                 </View>
-                <Text style={styles.unit}>SEC</Text>
+                <Text style={styles.unit}>{getDisplayUnit(restTime)}</Text>
               </TouchableOpacity>
             </View>
 

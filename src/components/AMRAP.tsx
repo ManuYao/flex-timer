@@ -1,3 +1,4 @@
+// Source: src/components/AMRAP.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, Alert, Dimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -70,6 +71,12 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
     return timeStr;
   }, []);
 
+  // Fonction pour déterminer l'unité à afficher en fonction de la valeur
+  const getDisplayUnit = useCallback((timeStr: string): string => {
+    const value = parseInt(timeStr);
+    return value >= 60 ? "MIN" : "SEC";
+  }, []);
+
   const openNumberPicker = useCallback((target: 'duration' | 'work' | 'rest') => {
     let config = {
       minValue: 1,
@@ -87,14 +94,14 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
         break;
       case 'work':
         config = {
-          minValue: 1,
+          minValue: 5,
           maxValue: 180,
           initialValue: parseInt(workTime)
         };
         break;
       case 'rest':
         config = {
-          minValue: 1,
+          minValue: 5,
           maxValue: 120,
           initialValue: parseInt(restTime)
         };
@@ -556,7 +563,7 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
                       {formatDisplayValue(workTime)}
                     </Text>
                   </View>
-                  <Text style={styles.unit}>SEC</Text>
+                  <Text style={styles.unit}>{getDisplayUnit(workTime)}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity 
@@ -570,7 +577,7 @@ const AmrapTimer: React.FC<TimerProps> = ({ onComplete }) => {
                       {formatDisplayValue(restTime)}
                     </Text>
                   </View>
-                  <Text style={styles.unit}>SEC</Text>
+                  <Text style={styles.unit}>{getDisplayUnit(restTime)}</Text>
                 </TouchableOpacity>
               </View>
             )}

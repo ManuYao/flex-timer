@@ -49,6 +49,12 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
     console.log(`[EMOM] ${message}`, data !== undefined ? data : '');
   };
 
+  // Fonction pour déterminer l'unité à afficher en fonction de la valeur
+  const getDisplayUnit = useCallback((timeStr: string): string => {
+    const value = parseInt(timeStr);
+    return value >= 60 ? "MIN" : "SEC";
+  }, []);
+
   const openNumberPicker = useCallback((target: 'rounds' | 'interval') => {
     let config = {
       minValue: 1,
@@ -88,6 +94,17 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
     const minutes = Math.floor(time / 60);
     const seconds = time % 60;
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+  }, []);
+
+  // Fonction pour formater les valeurs d'affichage (pour l'interface utilisateur)
+  const formatDisplayValue = useCallback((timeStr: string): string => {
+    const value = parseInt(timeStr);
+    if (value >= 60) {
+      const minutes = Math.floor(value / 60);
+      const seconds = value % 60;
+      return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    }
+    return timeStr;
   }, []);
 
   // Fonction pour arrêter tous les timers
@@ -395,10 +412,10 @@ const EMOM: React.FC<TimerProps> = ({ onComplete }) => {
               <Text style={styles.label}>INTERVALLE</Text>
               <View style={styles.inputWrapper}>
                 <Text style={styles.input}>
-                  {intervalTime}
+                  {formatDisplayValue(intervalTime)}
                 </Text>
               </View>
-              <Text style={styles.unit}>SEC</Text>
+              <Text style={styles.unit}>{getDisplayUnit(intervalTime)}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity

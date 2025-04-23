@@ -1,4 +1,4 @@
-// src/components/ForTime.tsx
+// Source: src/components/ForTime.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Pressable, StyleSheet, Alert, Dimensions } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -54,6 +54,23 @@ const ForTime = ({ onComplete }: TimerProps) => {
   const log = (msg: string, data?: any) => {
     console.log(`[ForTime] ${msg}`, data !== undefined ? data : '');
   };
+
+  // Fonction pour déterminer l'unité à afficher en fonction de la valeur
+  const getDisplayUnit = useCallback((timeStr: string): string => {
+    const value = parseInt(timeStr);
+    return value >= 60 ? "MIN" : "SEC";
+  }, []);
+
+  // Fonction pour formater les valeurs d'affichage (pour l'interface utilisateur)
+  const formatDisplayValue = useCallback((timeStr: string): string => {
+    const value = parseInt(timeStr);
+    if (value >= 60) {
+      const minutes = Math.floor(value / 60);
+      const seconds = value % 60;
+      return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    }
+    return timeStr;
+  }, []);
 
   // Fonction pour formater le temps (MM:SS)
   const formatTime = useCallback((time: number): string => {
@@ -499,10 +516,10 @@ const ForTime = ({ onComplete }: TimerProps) => {
               <Text style={styles.label}>REPOS</Text>
               <View style={styles.inputWrapper}>
                 <Text style={styles.input}>
-                  {restTime}
+                  {formatDisplayValue(restTime)}
                 </Text>
               </View>
-              <Text style={styles.unit}>SEC</Text>
+              <Text style={styles.unit}>{getDisplayUnit(restTime)}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
